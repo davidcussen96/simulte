@@ -45,76 +45,221 @@ void LtePhyVueV2X::initialize(int stage)
     }
 }
 
-void LtePhyUeD2D::handleSelfMessage(cMessage *msg)
+void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
 {
     if (msg->isName("v2xDecodingTimer"))
     {
-        // select one frame from the buffer. Implements the capture effect
-        LteAirFrame* frame = extractAirFrame();
-        UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(frame->removeControlInfo());
-
-        // decode the selected frame
-        decodeAirFrame(frame, lteInfo);
-
-        // clear buffer
         while (!d2dReceivedFrames_.empty())
         {
-            LteAirFrame* frame = d2dReceivedFrames_.back();
-            d2dReceivedFrames_.pop_back();
-            delete frame;
+            LteAirFrame* frame = extractAirFrame();
+            UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(frame->removeControlInfo());
+
+            // decode the selected frame
+            decodeAirFrame(frame, lteInfo);
         }
 
         delete msg;
-        d2dDecodingTimer_ = NULL;
+        v2xDecodingTimer_ = NULL;
+    } else if (msg->isName("updatePointers"))
+    {
+        current++;
+
+        if (current == 1000) {current = 0;}
+        pointerToEnd = current + 1;
+        if (pointerToEnd == 1000) {pointerToEnd = 0;}
+        std::vector<Subchannel*> subchannels = {new Subchannel(), new Subchannel(), new Subchannel()};
+        sensingWindow[current] = subchannels;
+        delete msg;
+        updatePointers();
+    } else if (msg->isName("updateSensingWindow"))
+    {
+        // TODO Needs revision. currTime etc.
+        int currTime = NOW, msAgo, counter = 0, subchannelIndex;
+        for (std::vector<Subchannel*>::iterator it = subchannelList.begin();
+                (it != subchannelList.end() || counter == 3); it++)
+        {
+            msAgo = floor(currTime - it->getTime());
+
+            RbMap rbmap = it->getRbMap();
+            RbMap::iterator it;
+            it = rbmap.begin();
+            if (rbmap.begin() == 0) subchannelIndex = 0;
+            else if (rbmap.begin() == 9) subchannelIndex = 1;
+            else subchannelIndex = 2;
+            sensingWindow[msAgo].insert(sensingWindow[msAgo].begin()+subchannelIndex, it);
+            counter++;
+        }
+        delete msg;
+        updateSensingWindow_ = NULL;
     }
     else
         LtePhyUe::handleSelfMessage(msg);
 }
 
+void LtePhyVueV2X::chooseCsr(int t2, int prioTx, int pRsvpTx, int cResel)
+{
+    int pRsvpPrime, prioRx, k, lSubch, pRsvpRx, pStep, thresAddition,
+    numSubch, numCsrs, subchIndex, numNotSensed = 0;
+    bool notSensedChecked = false;
+
+    std::vector<std::vector<Subchannel*>> Sa(t2, std::vector<Subchannel*>(3, new Subchannel()));
+
+    std::vector< std::vector<Subchannel*>>::iterator frame;
+    std::vector< std::vector<Subchannel*>>::iterator channel;
+
+    do
+    {
+        numCsrs = 300;
+        pStep = 100;
+
+        pRsvpTxPrime = pStep * pRsvpTx / 100;
+        k = 1;
+        q = 1;
+
+        lSubch = 1;
+        numSubch = 3;
+
+        thresAddition = 0;
+        msAgo = 1000;
+        wrapped = false;
+
+        for (auto frame = sensingWindow.begin() + pointerToEnd;
+                (frame != sensingWindow.begin() + pointerToEnd) || !wrapped; ++frame)
+        {
+            if (frame == sensingWindow.end())
+            {
+                frame = sensingWindow.begin();
+                wrapped = true;
+            }
+
+            subchIndex = 0;
+            for (channel = frame->begin(); channel != frame->end(); channel++)
+            {
+                if (channel->notSensed())
+                {
+                    if (notSensedChecked)
+                    {
+                        numCsrs -= numNotSensed;
+                    } else {
+                        for (unsigned int y = 0; y < 100; y++)
+                        {
+                            for (unsigned int j = 0; j < cResel; j++)
+                            {
+                                if (y + (j*pRsvpTxPrime) == -(msAgo) + pStep*k*q)
+                                {
+                                    Sa[y][0]->setNotSensed(true);
+                                    Sa[y][1]->setNotSensed(true);
+                                    Sa[y][2]->setNotSensed(true);
+                                    numCsrs -= 3;
+                                    numNotSensed += 3;
+
+                                    j = cResel, y = 100, channel = frame->end();
+                                }
+                            }
+                        }
+                        notSensedChecked = true;
+                    }
+                } else if (!channel->isFree())
+                {
+                    prioRx = channel->getPriority();
+                    pRsvpRx = channel->getResourceReservation();
+                    if (msAgo - (pRsvpRx*100) < 0 || pRsvpRx == 0)
+                    {
+                        subchIndex++;
+                        continue;
+                    }
+                    i = ((prioTx/100)*8) + prioRx + 1;
+                    //infinity
+                    if (i == 0 || i == 66) Th = nullptr; else Th = (-128 + (i-1)*2) + thresAddition;
+
+                    if (channel->isRsrpGreaterThan(Th))
+                    {
+                        for (unsigned int y = 0; y < 100; y++)
+                        {
+                            //riv
+                            riv = calculateRiv(lSubch, numSubch, subchIndex);
+                            for (unsigned int j = 0; j < cResel; j++)
+                            {
+                                if (-msAgo + q * pStep * pRsvpRx == y + j * pRsvpTxPrime)
+                                {
+                                    Sa[y][subchIndex]->setIsFree(false);
+                                    numCsrs -= 3;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                subchIndex++;
+            }
+            msAgo--;
+        }
+        thresAddition += 3;
+    } while (numCsrs < 0.2(300));
+
+    std::vector< tuple<int,int,int>> rssiValues;
+    std::vector<Subchannel*> listOfCsrs;
+    Subchannel* channel;
+
+    for (unsigned int x = 0; x < t2; x++)
+    {
+        for (unsigned int y = 0; y < 3; y++)
+        {
+            channel = Sa[x][y];
+            channel->setSubframe(x+1);
+            channel->setSubchannel(y+1);
+            if (channel->notSensed())
+            {
+                continue;
+            } else if (channel->isFree())
+            {
+                listOfCsrs.push_back(channel);
+            } else
+            {
+                rssi = channel->getRssi();
+                rssiValues.push_back(make_tuple(rssi, x, y));
+            }
+        }
+    }
+
+    sort(rssiValues.begin(), rssiValues.end());
+
+    tuple<int,int,int> currentRssi;
+    while (listOfCsrs.length() < 0.2(300))
+    {
+        currentRssi = rssiValues.pop_back();
+        listOfCsrs.push_back(Sa[get<1>(currentRssi)][get<2>(currentRssi)]);
+    }
+
+    // Send list of Csrs to MAC layer.
+    CsrMessage* csrMsg = new CsrMessage("CsrList");
+    csrMsg->setCsrList(listOfCsrs);
+    send(csrMsg,upperGateOut_);
+}
+
+int LtePhyVueV2X::calculateRiv(int lSubch, int numSubch, int startSubchIndex)
+{
+    int riv;
+    if (lSubch-1 <= numSubch / 2)
+    {
+        riv = numSubch(lSubch-1)+startSubchIndex;
+    } else
+    {
+        riv = numSubch(numSubch-lSubch+1) + numSubch - 1 - startSubchIndex;
+    }
+    return riv;
+}
+
 // TODO: ***reorganize*** method
-void LtePhyUeD2D::handleAirFrame(cMessage* msg)
+void LtePhyVueV2X::handleAirFrame(cMessage* msg)
 {
     UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());
 
-    if (useBattery_)
-    {
-        //TODO BatteryAccess::drawCurrent(rxAmount_, 0);
-    }
-    connectedNodeId_ = masterId_;
+    //connectedNodeId_ = masterId_;
     LteAirFrame* frame = check_and_cast<LteAirFrame*>(msg);
     EV << "LtePhyUeD2D: received new LteAirFrame with ID " << frame->getId() << " from channel" << endl;
-    //Update coordinates of this user
-    if (lteInfo->getFrameType() == HANDOVERPKT)
-    {
-        // check if handover is already in process
-        if (handoverTrigger_ != NULL && handoverTrigger_->isScheduled())
-        {
-            delete lteInfo;
-            delete frame;
-            return;
-        }
 
-        handoverHandler(frame, lteInfo);
-        return;
-    }
-
-    // Check if the frame is for us ( MacNodeId matches or - if this is a multicast communication - enrolled in multicast group)
-    if (lteInfo->getDestId() != nodeId_ && !(binder_->isInMulticastGroup(nodeId_, lteInfo->getMulticastGroupId())))
-    {
-        EV << "ERROR: Frame is not for us. Delete it." << endl;
-        EV << "Packet Type: " << phyFrameTypeToA((LtePhyFrameType)lteInfo->getFrameType()) << endl;
-        EV << "Frame MacNodeId: " << lteInfo->getDestId() << endl;
-        EV << "Local MacNodeId: " << nodeId_ << endl;
-        delete lteInfo;
-        delete frame;
-        return;
-    }
-
-    if (binder_->isInMulticastGroup(nodeId_,lteInfo->getMulticastGroupId()))
-    {
-        // HACK: if this is a multicast connection, change the destId of the airframe so that upper layers can handle it
-        lteInfo->setDestId(nodeId_);
-    }
+    lteInfo->setDestId(nodeId_);
 
     // send H-ARQ feedback up
     if (lteInfo->getFrameType() == HARQPKT || lteInfo->getFrameType() == GRANTPKT || lteInfo->getFrameType() == RACPKT || lteInfo->getFrameType() == D2DMODESWITCHPKT)
@@ -125,15 +270,23 @@ void LtePhyUeD2D::handleAirFrame(cMessage* msg)
 
     // this is a DATA packet
 
+    // TODO Always broadcast
     // if the packet is a D2D multicast one, store it and decode it at the end of the TTI
     if (d2dMulticastEnableCaptureEffect_ && binder_->isInMulticastGroup(nodeId_,lteInfo->getMulticastGroupId()))
     {
         // if not already started, auto-send a message to signal the presence of data to be decoded
-        if (d2dDecodingTimer_ == NULL)
+        if (v2xDecodingTimer_ == NULL)
         {
-            d2dDecodingTimer_ = new cMessage("d2dDecodingTimer");
-            d2dDecodingTimer_->setSchedulingPriority(10);          // last thing to be performed in this TTI
-            scheduleAt(NOW, d2dDecodingTimer_);
+            v2xDecodingTimer_ = new cMessage("v2xDecodingTimer");
+            v2xDecodingTimer_->setSchedulingPriority(10);          // last thing to be performed in this TTI
+            scheduleAt(NOW, v2xDecodingTimer_);
+        }
+
+        if (updateSensingWindow_ == NULL)
+        {
+            updateSensingWindow_ = new cMessage("updateSensingWindow");
+            updateSensingWindow_->setSchedulingPriority(10);
+            scheduleAt(NOW, updateSensingWindow_);
         }
 
         // store frame, together with related control info
@@ -143,6 +296,7 @@ void LtePhyUeD2D::handleAirFrame(cMessage* msg)
         return;                          // exit the function, decoding will be done later
     }
 
+    // TODO replace with MCS?
     if ((lteInfo->getUserTxParams()) != NULL)
     {
         int cw = lteInfo->getCw();
@@ -210,43 +364,26 @@ void LtePhyUeD2D::handleAirFrame(cMessage* msg)
         updateDisplayString();
 }
 
-void LtePhyUeD2D::triggerHandover()
+void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 {
-    // stop active D2D flows (go back to Infrastructure mode)
-    // currently, DM is possible only for UEs served by the same cell
-
-    // trigger D2D mode switch
-    cModule* enb = getSimulation()->getModule(binder_->getOmnetId(masterId_));
-    D2DModeSelectionBase *d2dModeSelection = check_and_cast<D2DModeSelectionBase*>(enb->getSubmodule("lteNic")->getSubmodule("d2dModeSelection"));
-    d2dModeSelection->doModeSwitchAtHandover(nodeId_, false);
-
-    LtePhyUe::triggerHandover();
-}
-
-void LtePhyUeD2D::doHandover()
-{
-    // amc calls
-    LteAmc *oldAmc = getAmcModule(masterId_);
-    LteAmc *newAmc = getAmcModule(candidateMasterId_);
-    assert(newAmc != NULL);
-    oldAmc->detachUser(nodeId_, D2D);
-    newAmc->attachUser(nodeId_, D2D);
-
-    LtePhyUe::doHandover();
-
-    // call mode selection module to check if DM connections are possible
-    cModule* enb = getSimulation()->getModule(binder_->getOmnetId(masterId_));
-    D2DModeSelectionBase *d2dModeSelection = check_and_cast<D2DModeSelectionBase*>(enb->getSubmodule("lteNic")->getSubmodule("d2dModeSelection"));
-    d2dModeSelection->doModeSwitchAtHandover(nodeId_, true);
-}
-
-void LtePhyUeD2D::handleUpperMessage(cMessage* msg)
-{
-//    if (useBattery_) {
-//    TODO     BatteryAccess::drawCurrent(txAmount_, 1);
-//    }
-
     UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());
+    CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
+    // Is the grant going to be encased in the cMessage
+    LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>();
+    if (lteInfo->getFrameType() == SCHEDGRANT)
+    {
+        // TODO Calculating time to transmit from msg.
+        Sci* sci = new Sci(grant->getPriority(), grant->getResourceReservation());
+        Subchannel* csr = grant->getCsr();
+
+        UsedRBs info;
+        info.time_ = timeRequested + (csr->getSubframe()/1000);
+    } else if (csrRequest->isName() == "csrRequest")
+    {
+        timeRequested = NOW;
+        chooseCsr(csrRequest->getPrioTx(), csrRequest->getRsvpTx(), csrRequest->getCResel());
+        return;
+    }
 
     // Store the RBs used for transmission. For interference computation
     RbMap rbMap = lteInfo->getGrantedBlocks();
@@ -304,118 +441,66 @@ void LtePhyUeD2D::handleUpperMessage(cMessage* msg)
     EV << "LtePhyUeD2D::handleUpperMessage - " << nodeTypeToA(nodeType_) << " with id " << nodeId_
        << " sending message to the air channel. Dest=" << lteInfo->getDestId() << endl;
 
-    // if this is a multicast/broadcast connection, send the frame to all neighbors in the hearing range
-    // otherwise, send unicast to the destination
-    if (lteInfo->getDirection() == D2D_MULTI)
-        sendBroadcast(frame);
-    else
-        sendUnicast(frame);
+    // Always broadcast message
+    sendBroadcast(frame);
+
 }
 
-void LtePhyUeD2D::storeAirFrame(LteAirFrame* newFrame)
+void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame, simtime_t time)
 {
     // implements the capture effect
     // store the frame received from the nearest transmitter
     UserControlInfo* newInfo = check_and_cast<UserControlInfo*>(newFrame->getControlInfo());
     Coord myCoord = getCoord();
-    double distance = 0.0;
-    double rsrpMean = 0.0;
     std::vector<double> rsrpVector;
-    bool useRsrp = false;
+    std::vector<double> rssiVector;
 
-    if (strcmp(par("d2dMulticastCaptureEffectFactor"),"RSRP") == 0)
+    rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+    rssiVector = channelModel_->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord);
+    int rsrp = 0;
+    int rssi = 0;
+
+    // get the average RSRP on the RBs allocated for the transmission
+    RbMap rbmap = newInfo->getGrantedBlocks();
+    RbMap::iterator it;
+    std::map<Band, unsigned int>::iterator jt;
+    //for each Remote unit used to transmit the packet
+    for (it = rbmap.begin(); it != rbmap.end(); ++it)
     {
-        useRsrp = true;
-
-        double sum = 0.0;
-        unsigned int allocatedRbs = 0;
-        rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
-
-        // get the average RSRP on the RBs allocated for the transmission
-        RbMap rbmap = newInfo->getGrantedBlocks();
-        RbMap::iterator it;
-        std::map<Band, unsigned int>::iterator jt;
-        //for each Remote unit used to transmit the packet
-        for (it = rbmap.begin(); it != rbmap.end(); ++it)
+        //for each logical band used to transmit the packet
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt)
         {
-            //for each logical band used to transmit the packet
-            for (jt = it->second.begin(); jt != it->second.end(); ++jt)
-            {
-                Band band = jt->first;
-                if (jt->second == 0) // this Rb is not allocated
-                    continue;
+            Band band = jt->first;
+            if (jt->second == 0) // this Rb is not allocated
+                continue;
 
-                sum += rsrpVector.at(band);
-                allocatedRbs++;
-            }
+            rsrp += rsrpVector.at(band);
+            rssi += rssiVector.at(band);
         }
-        rsrpMean = sum / allocatedRbs;
-        EV << NOW << " LtePhyUeD2D::storeAirFrame - Average RSRP from node " << newInfo->getSourceId() << ": " << rsrpMean ;
-    }
-    else  // distance
-    {
-        Coord newSenderCoord = newInfo->getCoord();
-        distance = myCoord.distance(newSenderCoord);
-        EV << NOW << " LtePhyUeD2D::storeAirFrame - Distance from node " << newInfo->getSourceId() << ": " << distance ;
     }
 
-    if (!d2dReceivedFrames_.empty())
-    {
-        LteAirFrame* prevFrame = d2dReceivedFrames_.front();
-        if (!useRsrp && distance < nearestDistance_)
-        {
-            EV << "[ < nearestDistance: " << nearestDistance_ << "]" << endl;
-
-            // remove the previous frame
-            d2dReceivedFrames_.pop_back();
-            delete prevFrame;
-
-            nearestDistance_ = distance;
-            d2dReceivedFrames_.push_back(newFrame);
-        }
-        else if (rsrpMean > bestRsrpMean_)
-        {
-            EV << "[ > bestRsrp: " << bestRsrpMean_ << "]" << endl;
-
-            // remove the previous frame
-            d2dReceivedFrames_.pop_back();
-            delete prevFrame;
-
-            bestRsrpMean_ = rsrpMean;
-            bestRsrpVector_ = rsrpVector;
-            d2dReceivedFrames_.push_back(newFrame);
-        }
-        else
-        {
-            // this frame will not be decoded
-            delete newFrame;
-        }
-    }
-    else
-    {
-        if (!useRsrp)
-        {
-            nearestDistance_ = distance;
-            d2dReceivedFrames_.push_back(newFrame);
-        }
-        else
-        {
-            bestRsrpMean_ = rsrpMean;
-            bestRsrpVector_ = rsrpVector;
-            d2dReceivedFrames_.push_back(newFrame);
-        }
-    }
+    Subchannel* subchannel = new Subchannel(sci, rbmap, rsrp, rssi, time);
+    subchannelList.push_front(subchannel);
+    v2xReceivedFrames_.push_back(newFrame);
+    delete newFrame;
 }
 
-LteAirFrame* LtePhyUeD2D::extractAirFrame()
+void LtePhyVueV2X::updatePointers()
+{
+    updatePointers_ = new cMessage("updatePointers");
+    updatePointers_->setSchedulingPriority(10);
+    scheduleAt(NOW+TTI, updatePointers_);
+}
+
+LteAirFrame* LtePhyVueV2X::extractAirFrame()
 {
     // implements the capture effect
     // the vector is storing the frame received from the strongest/nearest transmitter
 
-    return d2dReceivedFrames_.front();
+    return v2xReceivedFrames_.front();
 }
 
-void LtePhyUeD2D::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
+void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
 {
     EV << NOW << " LtePhyUeD2D::decodeAirFrame - Start decoding..." << endl;
 
@@ -479,7 +564,7 @@ void LtePhyUeD2D::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
 }
 
 
-void LtePhyUeD2D::sendFeedback(LteFeedbackDoubleVector fbDl, LteFeedbackDoubleVector fbUl, FeedbackRequest req)
+void LtePhyVueV2X::sendFeedback(LteFeedbackDoubleVector fbDl, LteFeedbackDoubleVector fbUl, FeedbackRequest req)
 {
     Enter_Method("SendFeedback");
     EV << "LtePhyUeD2D: feedback from Feedback Generator" << endl;
@@ -522,7 +607,7 @@ void LtePhyUeD2D::sendFeedback(LteFeedbackDoubleVector fbDl, LteFeedbackDoubleVe
     sendUnicast(frame);
 }
 
-void LtePhyUeD2D::finish()
+void LtePhyVueV2X::finish()
 {
     if (getSimulation()->getSimulationStage() != CTX_FINISH)
     {
