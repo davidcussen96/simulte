@@ -17,7 +17,7 @@ cplusplus {{
     #include "stack/subchannel/Subchannel.h"
 }}
 
-packet LteSchedulingGrantMode4 extends LteSchedulingGrant
+packet LteSchedulingGrantMode4
 {
     @customize(true);  // see the generated C++ header for more info
     bool periodic;
@@ -42,5 +42,6 @@ packet LteSchedulingGrantMode4 extends LteSchedulingGrant
     unsigned int mcs;
     unsigned int retransIndex;
     unsigned int reservedInfo;
-    Subchannel* csr;
+    
+    //# Subchannel* csr;
 }

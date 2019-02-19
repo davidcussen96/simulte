@@ -9,10 +9,11 @@
 #include "stack/mac/packet/LteSchedulingGrantMode4.h"
 #include "common/LteCommon.h"
 #include "stack/mac/amc/UserTxParams.h"
+#include "stack/subchannel/Subchannel.h"
 
 class UserTxParams;
 
-class LteSchedulingGrantMode4 : public LteSchedulingGrant
+class LteSchedulingGrantMode4 : public LteSchedulingGrant_Base
 {
   protected:
 
@@ -27,11 +28,12 @@ class LteSchedulingGrantMode4 : public LteSchedulingGrant
     unsigned int mcs_;
     unsigned int retransIndex_;
     unsigned int slResourceReselectionCounter_;
+    Subchannel* csr;
 
   public:
 
     LteSchedulingGrantMode4(const char *name = NULL, int kind = 0) :
-        LteSchedulingGrant(name, kind)
+        LteSchedulingGrant_Base(name, kind)
     {
         userTxParams = NULL;
         grantedCwBytes.resize(MAX_CODEWORDS);
@@ -47,7 +49,7 @@ class LteSchedulingGrantMode4 : public LteSchedulingGrant
     }
 
     LteSchedulingGrantMode4(const LteSchedulingGrantMode4& other) :
-        LteSchedulingGrant(other.getName())
+        LteSchedulingGrant_Base(other.getName())
     {
         operator=(other);
     }
@@ -66,7 +68,7 @@ class LteSchedulingGrantMode4 : public LteSchedulingGrant
         grantedBlocks = other.grantedBlocks;
         grantedCwBytes = other.grantedCwBytes;
         direction_ = other.direction_;
-        LteSchedulingGrant::operator=(other);
+        LteSchedulingGrant_Base::operator=(other);
         return *this;
     }
 

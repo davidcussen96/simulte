@@ -17,7 +17,7 @@ packet Sci
 {
     unsigned int priority;
     unsigned int resourceRes;
-    unsigned int freqResource
+    unsigned int freqResource;
     unsigned int timeGap;
     unsigned int mcs;
     unsigned int retrans;
