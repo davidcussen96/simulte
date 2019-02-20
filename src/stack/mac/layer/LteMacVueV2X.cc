@@ -56,7 +56,7 @@ void LteMacVueV2X::initialize(int stage)
 }
 
 //Function for create only a BSR for the eNB
-LteMacPdu* LteMacUeRealisticD2D::makeBsr(int size){
+LteMacPdu* LteMacVueV2X::makeBsr(int size){
 
     UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
@@ -76,7 +76,7 @@ LteMacPdu* LteMacUeRealisticD2D::makeBsr(int size){
     return macPkt;
 }
 
-void LteMacUeRealisticD2D::macPduMake()
+void LteMacVueV2X::macPduMake()
 {
     int64 size = 0;
 
@@ -301,7 +301,7 @@ void LteMacUeRealisticD2D::macPduMake()
     }
 }
 
-void LteMacUeRealisticD2D::handleMessage(cMessage* msg)
+void LteMacVueV2X::handleMessage(cMessage* msg)
 {
     if (msg->isSelfMessage())
     {
@@ -318,6 +318,7 @@ void LteMacUeRealisticD2D::handleMessage(cMessage* msg)
 
         EV << "LteMacUeRealisticD2D::handleMessage - Received packet " << pkt->getName() <<
                     " from port " << pkt->getArrivalGate()->getName() << endl;
+        csrMessage* csrMsg = check_and_cast<csrMessage*>(pkt);
         if (csrMsg->isName() == "CsrList")
         {
             Subchannel* csrList[] = csrMsg->getCsrList();
@@ -334,7 +335,7 @@ void LteMacUeRealisticD2D::handleMessage(cMessage* msg)
 
 void LteMacVueV2X::sendCsrRequest()
 {
-    macHandleGrant;
+    macHandleGrant();
     CsrRequest* csrRequest = new CsrRequest("csrRequest");
 
     csrRequest->setCResel(grant->getExpirationCounter());
@@ -358,9 +359,16 @@ Subchannel* LteMacVueV2X::chooseCsrAtRandom(Subchannel* csrList)
 
     int rand = distr(eng);
     Subchannel* csr = csrList[rand];
+    // From here you must calculate when the grant has to be sent to lower layers.
+    simtime_t now = NOW;
+    int csrOccurredXmsAgo = csr->getSubframe();
+    int csrSubchannel = csr->getSubchannel();
+    int rri = grant->getResourceRes();  // 100
+    int whatSubframeToTransmitIn = rri - csrOccurredXmsAgo;
+    simtime_t timeToTranmsit = now + (whatSubframeToTransmit/1000);
 }
 
-void LteMacUeRealisticD2D::macHandleGrant()
+void LteMacVueV2X::macHandleGrant()
 {
     EV << NOW << " LteMacUeRealisticD2D::macHandleGrant - UE [" << nodeId_ << "] - Grant received " << endl;
 
@@ -607,6 +615,8 @@ void LteMacUeRealisticD2D::handleSelfMessage()
             // resetting grant period
             periodCounter_=schedulingGrant_->getPeriod();
             // this is periodic grant TTI - continue with frame sending
+            // TODO Send grant here
+
         }
     }
 

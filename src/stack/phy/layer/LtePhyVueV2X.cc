@@ -74,19 +74,23 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
     } else if (msg->isName("updateSensingWindow"))
     {
         // TODO Needs revision. currTime etc.
-        int currTime = NOW, msAgo, counter = 0, subchannelIndex;
+        // Iterate through subchannels created from received AirFrames and update the sensing window.
+        simtime_t currTime = NOW;
+        float msAgo;
+        int counter = 0, subchannelIndex, frameIndex;
         for (std::vector<Subchannel*>::iterator it = subchannelList.begin();
                 (it != subchannelList.end() || counter == 3); it++)
         {
-            msAgo = floor(currTime - it->getTime());
-
+            msAgo = currTime - it->getTime();   // Gets how many ms ago the AirFrame was received.
+                                                // eg. 0.001ms ago * 1000 = 1; 1-1 to get index in sensing window.
+            frameIndex = static_cast<int>(msAgo);
             RbMap rbmap = it->getRbMap();
             RbMap::iterator it;
             it = rbmap.begin();
             if (rbmap.begin() == 0) subchannelIndex = 0;
             else if (rbmap.begin() == 9) subchannelIndex = 1;
             else subchannelIndex = 2;
-            sensingWindow[msAgo].insert(sensingWindow[msAgo].begin()+subchannelIndex, it);
+            sensingWindow[frameIndex].insert(sensingWindow[frameIndex].begin()+subchannelIndex, it);
             counter++;
         }
         delete msg;
@@ -366,29 +370,69 @@ void LtePhyVueV2X::handleAirFrame(cMessage* msg)
 
 void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 {
+    LteAirFrame* frame = NULL;
     UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());
     CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
-    // Is the grant going to be encased in the cMessage
-    LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>();
+
+    // Grant contains info needed to create an SCI
+    LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(msg->remove_reference_t<LteSchedulingGrantMode4*>());
     if (lteInfo->getFrameType() == SCHEDGRANT)
     {
-        // TODO Calculating time to transmit from msg.
+        // Received a grant so we create an SCI.
         Sci* sci = new Sci(grant->getPriority(), grant->getResourceReservation());
+
+        // Extract csr from grant.
         Subchannel* csr = grant->getCsr();
 
+        RbMap rbMap = lteInfo->getGrantedBlocks();
         UsedRBs info;
-        info.time_ = timeRequested + (csr->getSubframe()/1000);
+        info.time_ = NOW;
+        info.rbMap_ = rbMap;
+
+        //info.time_ = timeRequested + (csr->getSubframe()/1000);
+
+        // Grant is received so send the SCI and data packet.
+        sendBroadcast(frame);   // How do I add the SCI?? Do I encapsulate it in its own AirFrame.
+
+        //After sending data packet, set data packet = null
+
+        LteAirFrame* frame = NULL;
+
     } else if (csrRequest->isName() == "csrRequest")
     {
         timeRequested = NOW;
         chooseCsr(csrRequest->getPrioTx(), csrRequest->getRsvpTx(), csrRequest->getCResel());
         return;
+
+    } else if (lteInfo->getFrameType() == DATAPKT)
+    {
+        // Message received is a data packet. Store it and send it + SCI when the next grant is received.
+        // If there was no data packet received when a grant is received you still send an SCI.
+        // if the data packet is null then just an SCI is sent.
+        // create LteAirFrame and encapsulate the received packet
+
+        frame = new LteAirFrame("airframe");
+
+        frame->encapsulate(check_and_cast<cPacket*>(msg));
+
+        // initialize frame fields
+
+        frame->setSchedulingPriority(airFramePriority_);
+        frame->setDuration(TTI);
+        // set current position
+        lteInfo->setCoord(getRadioPosition());
+
+        lteInfo->setTxPower(txPower_);
+        lteInfo->setD2dTxPower(d2dTxPower_);
+        frame->setControlInfo(lteInfo);
+
     }
 
+    /*
     // Store the RBs used for transmission. For interference computation
     RbMap rbMap = lteInfo->getGrantedBlocks();
-    UsedRBs info;
-    info.time_ = NOW;
+    //UsedRBs info;
+    //info.time_ = NOW;
     info.rbMap_ = rbMap;
 
     usedRbs_.push_back(info);
@@ -443,7 +487,7 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 
     // Always broadcast message
     sendBroadcast(frame);
-
+    */
 }
 
 void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame, simtime_t time)
