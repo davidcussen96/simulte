@@ -6,10 +6,13 @@
 // The above file and the present reference are part of the software itself,
 // and cannot be removed from it.
 //
+#pragma once
 
 #include "stack/mac/packet/LteSchedulingGrant_m.h"
 #include "common/LteCommon.h"
 #include "stack/mac/amc/UserTxParams.h"
+#include "stack/mac/packet/LteSchedulingGrant.h"
+#include "stack/subchannel/Subchannel.h"
 
 class UserTxParams;
 
@@ -126,4 +129,55 @@ class LteSchedulingGrant : public LteSchedulingGrant_Base
     {
         return direction_;
     }
+};
+
+class LteSchedulingGrantMode4 : public LteSchedulingGrant
+{
+private:
+    unsigned int priority;
+    unsigned int resourceReservation;
+    unsigned int freqResource;
+    unsigned int timeGap;
+    unsigned int mcs;
+    unsigned int retransIndex;
+    unsigned int reservedInfo;
+    
+    Subchannel* csr;
+    
+public:
+    virtual void setCsr(Subchannel* subchannel)
+    {
+        csr = subchannel;
+    }
+    virtual Subchannel* getCsr()
+    {
+        return csr;
+    }
+    
+    virtual unsigned int getPriority() {return priority;}
+    unsigned int setPriority(unsigned int p) {priority = p;}
+    
+    virtual unsigned int getResourceReservation()
+    {
+        return resourceReservation;
+    }
+    virtual void setResourceReservation(unsigned int rr)
+    {
+        resourceReservation = rr;
+    }
+    
+    virtual unsigned int getFreqResource() {return freqResource;}
+    virtual void setFreqResource(unsigned int fr) {freqResource = fr;}
+    
+    virtual unsigned int getTimeGap() {return timeGap;}
+    virtual void setTimeGap(unsigned int tg) {timeGap = tg;}
+    
+    virtual unsigned int getMcs() {return mcs;}
+    virtual void set(unsigned int m) {mcs = m;}
+    
+    virtual unsigned int getRetransIndex() {return retransIndex;}
+    virtual void set(unsigned int ri) {retransIndex = ri;}
+    
+    virtual unsigned int getReservedInfo() {return reservedInfo;}
+    virtual void set(unsigned int ri) {reservedInfo = ri;}
 };
