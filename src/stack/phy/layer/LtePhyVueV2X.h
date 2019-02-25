@@ -10,7 +10,7 @@
 #ifndef _LTE_AIRPHYVUEV2X_H_
 #define _LTE_AIRPHYVUEV2X_H_
 
-#include "stack/phy/layer/LtePhyUe.h"
+#include "stack/phy/layer/LtePhyVueV2X.h"
 #include "stack/subchannel/Subchannel/h"
 
 class LtePhyVueV2X : public LtePhyUeD2D
@@ -30,6 +30,10 @@ class LtePhyVueV2X : public LtePhyUeD2D
     int pointerToEnd = 999;
     int current = 0;
     simtime_t timeRequested;
+    LteAirFrame* dataFrame = new LteAirFrame("empty frame");
+    std::vector<Subchannel*> sciList;
+    std::vector<Subchannel*> tbList;
+    
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();
     void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo);
