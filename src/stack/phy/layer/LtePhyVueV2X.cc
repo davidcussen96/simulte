@@ -15,7 +15,9 @@
 #include "stack/phy/ChannelModel/LteRealisticChannelModel.h"
 #include "stack/subchannel/Subchannel.h"
 #include "stack/mac/packet/LteSchedulingGrantMode4.h"
-#include "stack/mac/packet/CsrRequest.h"
+#include "stack/mac/packet/CsrRequest_m.h"
+#include "stack/phy/packet/CsrMessage.h"
+#include "stack/phy/packet/LteAirFrame.h"
 
 Define_Module(LtePhyVueV2X);
 
@@ -75,7 +77,30 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
     {
         // TODO Needs revision. currTime etc.
         // Iterate through subchannels created from received AirFrames and update the sensing window.
+        bool noMatch;
         simtime_t currTime = NOW;
+        for (std::vector<Subchannel*>::iterator it = sciList.begin(); it != sciList.end(); it++)
+        {
+            noMatch = true;
+            Sci* sci = it->getSci();
+            RbMap* rbmap1 = it->getRbMap();
+            for (std::vector<Subchannel*>::iterator jt = tbList.begin(); jt != tbList.end(); jt++)
+            {
+                RbMap* rbmap2 = jt->getRbMap();
+                // if end of rbmap1 == start of rbmap2  then they're in the same subframe.
+                if (rbmap1.end()->second.end() + 1 == rbmap2.begin()->second.first()->first())
+                {
+                    // Add SCI and TB to create Subchannel.
+                    Subchannel* newSubchannel = it.Add(jt);
+                    subchannelList.push_front(newSubchannel);
+                    noMatch = false;
+                } 
+            }
+            if (noMatch) subchannelList.push_front(it);
+        }
+        sciList.clear();
+        tbList.clear();
+        
         float msAgo;
         int counter = 0, subchannelIndex, frameIndex;
         for (std::vector<Subchannel*>::iterator it = subchannelList.begin();
@@ -370,34 +395,34 @@ void LtePhyVueV2X::handleAirFrame(cMessage* msg)
 
 void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 {
-    LteAirFrame* frame = NULL;
     UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());
     CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
-
-    // Grant contains info needed to create an SCI
-    LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(msg->remove_reference_t<LteSchedulingGrantMode4*>());
-    if (lteInfo->getFrameType() == SCHEDGRANT)
+    if (msg->getName() == "scheduling grant")
     {
+        LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(msg->remove_reference_t<LteSchedulingGrantMode4*>());
         // Received a grant so we create an SCI.
         Sci* sci = new Sci(grant->getPriority(), grant->getResourceReservation());
-
         // Extract csr from grant.
         Subchannel* csr = grant->getCsr();
+        LteAirFrame* sciFrame = new AirFrame("SCI");
+        
+        sciFrame->encapsulate(check_and_cast<cPacket*>(msg));
+        sciFrame->setSchedulingPriority("airFramePriority");
+        sciFrame->setDuration(TTI);
+        // set current position
+        lteInfo->setCoord(getRadioPosition());
 
-        RbMap rbMap = lteInfo->getGrantedBlocks();
-        UsedRBs info;
-        info.time_ = NOW;
-        info.rbMap_ = rbMap;
-
-        //info.time_ = timeRequested + (csr->getSubframe()/1000);
-
-        // Grant is received so send the SCI and data packet.
-        sendBroadcast(frame);   // How do I add the SCI?? Do I encapsulate it in its own AirFrame.
-
-        //After sending data packet, set data packet = null
-
-        LteAirFrame* frame = NULL;
-
+        lteInfo->setTxPower(txPower_);
+        lteInfo->setD2dTxPower(d2dTxPower_);
+        sciFrame->setControlInfo(lteInfo);
+        
+        sendBroadcast(sciFrame);
+        if (dataFrame->getName() != "empty frame")
+        {
+            sendBroadcast(sciFrame);
+        }
+        dataFrame = new AirFrame("empty frame");
+        
     } else if (csrRequest->isName() == "csrRequest")
     {
         timeRequested = NOW;
@@ -492,8 +517,6 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 
 void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame, simtime_t time)
 {
-    // implements the capture effect
-    // store the frame received from the nearest transmitter
     UserControlInfo* newInfo = check_and_cast<UserControlInfo*>(newFrame->getControlInfo());
     Coord myCoord = getCoord();
     std::vector<double> rsrpVector;
@@ -522,9 +545,15 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame, simtime_t time)
             rssi += rssiVector.at(band);
         }
     }
-
-    Subchannel* subchannel = new Subchannel(sci, rbmap, rsrp, rssi, time);
-    subchannelList.push_front(subchannel);
+    
+    Sci* sci = check_and_cast<Sci*>(newFrame);
+    if (sci != nullptr) {
+        Subchannel* subchannel = new Subchannel(sci, rbmap, rsrp, rssi, time);
+        sciList.push_front(subchannel);
+    } else {
+        Subchannel* subchannel = new Subchannel(rbmap, rsrp, rssi, time);
+        tbList.push_front(subchannel);
+    }
     v2xReceivedFrames_.push_back(newFrame);
     delete newFrame;
 }
