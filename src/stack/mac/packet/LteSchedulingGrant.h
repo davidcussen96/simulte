@@ -155,7 +155,7 @@ public:
     }
     
     virtual unsigned int getPriority() {return priority;}
-    unsigned int setPriority(unsigned int p) {priority = p;}
+    virtual unsigned int setPriority(unsigned int p) {priority = p;}
     
     virtual unsigned int getResourceReservation()
     {
@@ -173,11 +173,11 @@ public:
     virtual void setTimeGap(unsigned int tg) {timeGap = tg;}
     
     virtual unsigned int getMcs() {return mcs;}
-    virtual void set(unsigned int m) {mcs = m;}
+    virtual void setMcs(unsigned int m) {mcs = m;}
     
     virtual unsigned int getRetransIndex() {return retransIndex;}
-    virtual void set(unsigned int ri) {retransIndex = ri;}
+    virtual void setRetransIndex(unsigned int ri) {retransIndex = ri;}
     
     virtual unsigned int getReservedInfo() {return reservedInfo;}
-    virtual void set(unsigned int ri) {reservedInfo = ri;}
+    virtual void setReservedInfo(unsigned int ri) {reservedInfo = ri;}
 };

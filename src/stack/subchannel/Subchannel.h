@@ -1,27 +1,35 @@
-#include "lte/src/stack/sci/Sci.h"
+#pragma once
+
+#include "stack/sci/Sci.h"
+#include "common/LteCommon.h"
 
 class Subchannel
 {
 private:
-    RbMap rbmap;
-    Sci sci;
+    //RbMap rbmap;        // Don't think Subchannel needs RbMap, can be determined using subchannel.
+    Sci* sci;
     int rsrp;
     int rssi;
     bool notSensed;
     bool isFree = true;
     int subframe;
     int subchannel;
-    simtime_t timeReceived;
+    uint16_t sourceId;
 
 public:
     Subchannel();
 
-    Subchannel(RbMap rbmap, Sci sci, int rsrp, int rssi, simtime_t timeRec);
+    Subchannel(Sci* sci, int rsrp, int rssi, uint16_t sourceId, int subch);
 
-    bool isRsrpGreaterThan(int Th);
+    Subchannel(int rsrp, int rssi, uint16_t sourceId, int subch);
 
-    RbMap getRbMap() {return rbmap;}
-    Sci getSci() {return sci;}
+    // Copy constructor
+    Subchannel(const Subchannel &s2);
+
+    bool isRsrpLessThan(int Th);
+
+    //RbMap getRbMap() {return rbmap;}
+    Sci* getSci() {return sci;}
     int getRsrp() {return rsrp;}
     int getRssi() {return rssi;}
     bool getNotSensed() {return notSensed;}
@@ -33,5 +41,16 @@ public:
     void setSubchannel(int channel) {subchannel = channel;}
     int getSubchannel() {return subchannel;}
 
-    simtime_t getTime() {return timeReceived;}
+
+    void setSourceId(uint16_t sid) {sourceId = sid;}
+    uint16_t getSourceId() {return sourceId;}
+
+    bool getIsFree() {return isFree;}
+    void setIsFree(bool f) {isFree = f;}
+
+    friend Subchannel operator+(Subchannel &s1, Subchannel &s2);
+
+    Subchannel* add(Subchannel* sc);
 };
+
+//Subchannel* operator+(Subchannel& a, Subchannel& b);

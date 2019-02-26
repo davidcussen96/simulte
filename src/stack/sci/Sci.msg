@@ -15,6 +15,8 @@
 
 packet Sci 
 {
+    @customize(true);
+    
     unsigned int priority;
     unsigned int resourceRes;
     unsigned int freqResource;

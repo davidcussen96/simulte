@@ -19,5 +19,4 @@ cplusplus{{
 
 packet CsrMessage {
     @customize(true);
-    //# std::vector<Subchannel*> csrList;
 } 

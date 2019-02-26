@@ -33,7 +33,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
     UserTxParams* preconfiguredTxParams_;
     UserTxParams* getPreconfiguredTxParams();  // build and return new user tx params
 
-    LteSchedulingGrantMode4* currentGrant;
+    LteSchedulingGrantMode4* schedulingGrant_;
     Subchannel* currentCsr;
 
   protected:
@@ -54,7 +54,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
      */
     virtual void handleSelfMessage();
 
-    virtual void macHandleGrant(cPacket* pkt);
+    virtual void macHandleGrant();
 
     /*
      * Checks RAC status
@@ -81,7 +81,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
      */
     virtual void macPduMake();
 
-    virtual void chooseCsrAtRandom(Subchannel* csrList);
+    virtual Subchannel* chooseCsrAtRandom(std::vector<Subchannel*> csrList);
     virtual void sendSchedulingGrant();
     virtual void sendCsrRequest();
 

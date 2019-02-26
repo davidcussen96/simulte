@@ -11,7 +11,7 @@
 #define _LTE_AIRPHYVUEV2X_H_
 
 #include "stack/phy/layer/LtePhyVueV2X.h"
-#include "stack/subchannel/Subchannel/h"
+#include "stack/subchannel/Subchannel.h"
 
 class LtePhyVueV2X : public LtePhyUeD2D
 {
@@ -19,8 +19,8 @@ class LtePhyVueV2X : public LtePhyUeD2D
 
     // D2D Tx Power
     double d2dTxPower_;
-
-    std::vector<std::vector<Subchannel*>> sensingWindow{1000, std::vector<Subchannel*>(3,1)};
+    std::vector<std::vector<Subchannel*>> sensingWindow;
+    //std::vector<std::vector<Subchannel*>> sensingWindow(1000, std::vector<Subchannel*>(3, new Subchannel()));
     std::vector<Subchannel*> subchannelList;
     std::vector<LteAirFrame*> v2xReceivedFrames_; // airframes received in the current TTI. Only one will be decoded
     cMessage* v2xDecodingTimer_;                  // timer for triggering decoding at the end of the TTI. Started
@@ -46,7 +46,7 @@ class LtePhyVueV2X : public LtePhyUeD2D
     virtual void handleSelfMessage(cMessage *msg);
     virtual void updatePointers();
     virtual int calculateRiv(int lSubch, int numSubch, int startSubchIndex);
-    virtual void chooseCsr(int t2, int prioTx, int pRsvpTx, int cResel);
+    virtual void chooseCsr(int prioTx, int pRsvpTx, int cResel);
 
 
   public:

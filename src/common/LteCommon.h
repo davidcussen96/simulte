@@ -460,6 +460,7 @@ enum LtePhyFrameType
     GRANTPKT,
     RACPKT,
     D2DMODESWITCHPKT,
+    CSRREQUEST,
     UNKNOWN_TYPE
 };
 
@@ -476,6 +477,7 @@ const LtePhyFrameTable phytypes[] = {
     ELEM(HANDOVERPKT),
     ELEM(GRANTPKT),
     ELEM(D2DMODESWITCHPKT),
+    ELEM(CSRREQUEST),
     ELEM(UNKNOWN_TYPE)
 };
 

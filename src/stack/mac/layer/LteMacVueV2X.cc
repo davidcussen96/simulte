@@ -3,14 +3,14 @@
 #include "stack/mac/buffer/harq/LteHarqBufferRx.h"
 #include "stack/mac/buffer/LteMacQueue.h"
 #include "stack/mac/packet/LteSchedulingGrant.h"
-#include "stack/mac/packet/LteSchedulingGrantMode4.h"
 #include "stack/mac/scheduler/LteSchedulerUeUl.h"
 #include "stack/mac/layer/LteMacEnbRealistic.h"
 #include "stack/mac/buffer/harq_d2d/LteHarqBufferRxD2DMirror.h"
 #include "stack/d2dModeSelection/D2DModeSwitchNotification_m.h"
 #include "stack/mac/packet/LteRac_m.h"
-#include "stack/mac/packet/CsrMessage.h"
+#include "stack/phy/packet/CsrMessage.h"
 #include "stack/subchannel/Subchannel.h"
+#include "stack/mac/packet/CsrRequest_m.h"
 #include <random>
 
 Define_Module(LteMacVueV2X);
@@ -314,16 +314,16 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
 
     if (incoming == down_[IN])
     {
-        UserControlInfo *userInfo = check_and_cast<UserControlInfo *>(pkt->getControlInfo());
+        //UserControlInfo *userInfo = check_and_cast<UserControlInfo *>(pkt->getControlInfo());
 
         EV << "LteMacUeRealisticD2D::handleMessage - Received packet " << pkt->getName() <<
                     " from port " << pkt->getArrivalGate()->getName() << endl;
-        csrMessage* csrMsg = check_and_cast<csrMessage*>(pkt);
-        if (csrMsg->isName() == "CsrList")
-        {
-            Subchannel* csrList[] = csrMsg->getCsrList();
 
-            currentCsr = chooseCsrAtRandom(csrList);
+        CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
+        if (strcmp(csrMsg->getName(), "CsrList") == 0)
+        {
+
+            currentCsr = chooseCsrAtRandom(csrMsg->getCsrList());
 
             macHandleGrant();   // Creates a new grant
         }
@@ -338,34 +338,40 @@ void LteMacVueV2X::sendCsrRequest()
     macHandleGrant();
     CsrRequest* csrRequest = new CsrRequest("csrRequest");
 
-    csrRequest->setCResel(grant->getExpirationCounter());
-    csrRequest->setPrioTx(grant->getPriority());
-    csrRequest->setPrsvpTx(grant->getResourceRes());
+    csrRequest->setCResel(schedulingGrant_->getExpiration());
+    csrRequest->setPrioTx(schedulingGrant_->getPriority());
+    csrRequest->setPRsvpTx(schedulingGrant_->getResourceReservation());
 
     UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
-    uinfo->setDestid(getMacCellId());
+    uinfo->setDestId(getMacCellId());
     uinfo->setDirection(DL);
     uinfo->setFrameType(CSRREQUEST);
     csrRequest->setControlInfo(uinfo);
-    sendLowerPackets(csrRequest);
+    // Have to check and cast csr request to packet in order to send using function sendLowerPackets
+    cPacket* pkt = check_and_cast<cPacket*>(csrRequest);
+    sendLowerPackets(pkt);
 }
 
-Subchannel* LteMacVueV2X::chooseCsrAtRandom(Subchannel* csrList)
+Subchannel* LteMacVueV2X::chooseCsrAtRandom(std::vector<Subchannel*> csrList)
 {
     std::random_device rd;
     std::mt19937 eng(rd());
-    std::uniform_int_distribution<> distr(0, csrList.length()-1);
+    std::uniform_int_distribution<> distr(0, csrList.size()-1);
 
     int rand = distr(eng);
     Subchannel* csr = csrList[rand];
     // From here you must calculate when the grant has to be sent to lower layers.
+    /*
     simtime_t now = NOW;
     int csrOccurredXmsAgo = csr->getSubframe();
     int csrSubchannel = csr->getSubchannel();
     int rri = grant->getResourceRes();  // 100
     int whatSubframeToTransmitIn = rri - csrOccurredXmsAgo;
     simtime_t timeToTranmsit = now + (whatSubframeToTransmit/1000);
+    */
+
+    return csr;
 }
 
 void LteMacVueV2X::macHandleGrant()
@@ -373,13 +379,13 @@ void LteMacVueV2X::macHandleGrant()
     EV << NOW << " LteMacUeRealisticD2D::macHandleGrant - UE [" << nodeId_ << "] - Grant received " << endl;
 
     // delete old grant
-    LteSchedulingGrantMode4* grant = new LteSchedulingGrantMode4("");
+    LteSchedulingGrantMode4* grant = new LteSchedulingGrantMode4();
     grant->setPriority(1);
-    grant->setResourceRes(100);
+    grant->setResourceReservation(100);
 
-    UserControlInfo* uinfo = new userControlInfo();
+    UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
-    unifo->setDestId(getMacCellId);
+    uinfo->setDestId(getMacCellId());
     uinfo->setDirection(DL);
     uinfo->setFrameType(GRANTPKT);
     grant->setControlInfo(uinfo);
@@ -406,7 +412,7 @@ void LteMacVueV2X::macHandleGrant()
 
 }
 
-void LteMacUeRealisticD2D::checkRAC()
+void LteMacVueV2X::checkRAC()
 {
     EV << NOW << " LteMacUeRealisticD2D::checkRAC , Ue  " << nodeId_ << ", racTimer : " << racBackoffTimer_ << " maxRacTryOuts : " << maxRacTryouts_
        << ", raRespTimer:" << raRespTimer_ << endl;
@@ -479,7 +485,7 @@ void LteMacUeRealisticD2D::checkRAC()
     }
 }
 
-void LteMacUeRealisticD2D::macHandleRac(cPacket* pkt)
+void LteMacVueV2X::macHandleRac(cPacket* pkt)
 {
     LteRac* racPkt = check_and_cast<LteRac*>(pkt);
 
@@ -521,7 +527,7 @@ void LteMacUeRealisticD2D::macHandleRac(cPacket* pkt)
 }
 
 
-void LteMacUeRealisticD2D::handleSelfMessage()
+void LteMacVueV2X::handleSelfMessage()
 {
     EV << "----- UE MAIN LOOP -----" << endl;
 
@@ -727,7 +733,7 @@ void LteMacUeRealisticD2D::handleSelfMessage()
 }
 
 
-UserTxParams* LteMacUeRealisticD2D::getPreconfiguredTxParams()
+UserTxParams* LteMacVueV2X::getPreconfiguredTxParams()
 {
     UserTxParams* txParams = new UserTxParams();
 
@@ -753,7 +759,7 @@ UserTxParams* LteMacUeRealisticD2D::getPreconfiguredTxParams()
     return txParams;
 }
 
-void LteMacUeRealisticD2D::macHandleD2DModeSwitch(cPacket* pkt)
+void LteMacVueV2X::macHandleD2DModeSwitch(cPacket* pkt)
 {
     EV << NOW << " LteMacUeRealisticD2D::macHandleD2DModeSwitch - Start" << endl;
 

@@ -4,29 +4,19 @@
  *  Created on: Feb 18, 2019
  *      Author: djc10
  */
+#pragma once
 
-#ifndef STACK_SCI_SCI_H_
-#define STACK_SCI_SCI_H_
+#include "stack/sci/Sci_m.h"
 
-class Sci
+class Sci : public Sci_Base
 {
-private:
-    unsigned int priority;
-    unsigned int resourceRes;
-    unsigned int freqResource;
-    unsigned int timeGap;
-    unsigned int mcs;
-    unsigned int retransIndex;
 
 public:
     Sci(unsigned int pri, unsigned int rr) {
         priority = pri;
         resourceRes = rr;
     }
+
+    Sci();
 };
 
-
-
-
-
-#endif /* STACK_SCI_SCI_H_ */
