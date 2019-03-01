@@ -46,8 +46,12 @@ module Car
         int macCellId = default(0); // TODO: this is not a real parameter
 
         //# D2D capability
-        bool d2dCapable = default(false);
-        string nicType = d2dCapable ? "LteNicUeD2D" : "LteNicUe";
+        //# bool d2dCapable = default(false);
+        //# string nicType = mode4Capable ? "LteNicUeD2D" : "LteNicUe";
+        
+        //# V2X Mode 4 capability
+        bool mode4Capable = default(true);
+        string nicType = mode4Capable ? "LteNicVueV2X" : "LteNicUe"
 
         //# Network Layer specs
         string networkLayerType = default("IPv4NetworkLayer");

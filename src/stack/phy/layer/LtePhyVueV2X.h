@@ -17,6 +17,8 @@ class LtePhyVueV2X : public LtePhyUeD2D
 {
   protected:
 
+    // Number of subchannels per subframe -> 4 subchannels per subframe with 12 RBs per subchannel.
+    int numSubchannels = 4;
     // D2D Tx Power
     double d2dTxPower_;
     std::vector<std::vector<Subchannel*>> sensingWindow;
@@ -33,6 +35,7 @@ class LtePhyVueV2X : public LtePhyUeD2D
     LteAirFrame* dataFrame = new LteAirFrame("empty frame");
     std::vector<Subchannel*> sciList;
     std::vector<Subchannel*> tbList;
+    std::map<uint16_t, unsigned int> mcsMap;
     
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();

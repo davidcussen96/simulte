@@ -233,6 +233,17 @@ simple LteMacUeRealisticD2D extends LteMacUeRealistic
     int d2dCqi = default(7);
 }
 
+// C-V2X Mode 4 extends existing D2D
+simple LteMacVueV2X extends LteMacUeRealisticD2D
+{
+	parameters:
+	    
+	    @class("LteMacVueV2X");
+	    
+	    //bool usePreconfiguredTxParams = default(false);
+	    int v2xMcs = default(0);
+}
+
 //
 // eNodeB MAC layer of LTE stack
 //

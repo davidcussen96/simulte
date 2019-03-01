@@ -1564,8 +1564,7 @@ double LteRealisticChannelModel::jakesFading(MacNodeId nodeId, double speed,
     return linearToDb(re_h * re_h + im_h * im_h);
 }
 
-bool LteRealisticChannelModel::error(LteAirFrame *frame,
-        UserControlInfo* lteInfo)
+bool LteRealisticChannelModel::error(LteAirFrame *frame, UserControlInfo* lteInfo, int mcs)
 {
     EV << "LteRealisticChannelModel::error" << endl;
 
@@ -1582,7 +1581,7 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame,
         cw = 0;
 
     //get cqi used to transmit this cw
-    Cqi cqi = lteInfo->getUserTxParams()->readCqiVector()[cw];
+    //Cqi cqi = lteInfo->getUserTxParams()->readCqiVector()[cw];
 
     MacNodeId id;
     Direction dir = (Direction) lteInfo->getDirection();
@@ -1600,7 +1599,7 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame,
     if (nTx == 0)
         throw cRuntimeError("Transmissions counter should not be 0");
 
-    //Get txmode
+    //Get txmode TODO Will we add SISO to TxMode
     TxMode txmode = (TxMode) lteInfo->getTxMode();
 
     // If rank is 1 and we used SMUX to transmit we have to corrupt this packet
@@ -1657,15 +1656,17 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame,
                     continue;
 
             //Get the Bler
-            if (cqi == 0 || cqi > 15)
-                throw cRuntimeError("A packet has been transmitted with a cqi equal to 0 or greater than 15 cqi:%d txmode:%d dir:%d rb:%d cw:%d rtx:%d", cqi,lteInfo->getTxMode(),dir,jt->second,cw,nTx);
+            //if (cqi == 0 || cqi > 15)
+                //throw cRuntimeError("A packet has been transmitted with a cqi equal to 0 or greater than 15 cqi:%d txmode:%d dir:%d rb:%d cw:%d rtx:%d", cqi,lteInfo->getTxMode(),dir,jt->second,cw,nTx);
             int snr = snrV[jt->first];//XXX because jt->first is a Band (=unsigned short)
             if (snr < 0)
                 return false;
             else if (snr > binder_->phyPisaData.maxSnr())
                 bler = 0;
             else
-                bler = binder_->phyPisaData.getBler(itxmode, cqi - 1, snr);
+                // TODO This getBler has to incorporate mcs instead of cqi
+                //bler = binder_->phyPisaData.getBler(itxmode, cqi - 1, snr);
+                bler = binder_->phyPisaData.getPuschBler(AWGN, SISO, mcs, snr);
 
             EV << "\t bler computation: [itxMode=" << itxmode << "] - [cqi-1=" << cqi-1
                     << "] - [snr=" << snr << "]" << endl;
@@ -1708,6 +1709,8 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame,
     return true;
 }
 
+
+// TODO This looks like the method we should be extending.
 bool LteRealisticChannelModel::error_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector)
 {
     EV << "LteRealisticChannelModel::error_D2D" << endl;

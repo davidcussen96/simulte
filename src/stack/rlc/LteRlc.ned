@@ -17,8 +17,10 @@ module LteRlc {
     parameters:
         @display("i=block/transport");      
         string LteRlcUmType = default("LteRlcUmRealistic");          // One of: "LteRlcUm", "LteRlcUmRealistic", "LteRlcUmRealisticD2D"      
-        bool d2dCapable;                                             // inherit the value from the parent module
-        string umType = d2dCapable ? "LteRlcUmRealisticD2D" : LteRlcUmType;
+        //bool d2dCapable;                                             // inherit the value from the parent module
+        bool mode4Capable;
+        //string umType = d2dCapable ? "LteRlcUmRealisticD2D" : LteRlcUmType;
+        string umType = "LteRlcUmRealisticD2D";
 
     gates:
         //# 

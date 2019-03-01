@@ -27,7 +27,8 @@ import lte.stack.handoverManager.LteHandoverManager;
 moduleinterface ILteNic extends IWirelessNic
 {
         string nodeType;
-        bool d2dCapable;            // inherit the value from the parent module
+        //bool d2dCapable;            // inherit the value from the parent module
+        bool mode4Capable;
     gates:
         inout EUTRAN_RRC_Sap;   // Control of RRC Layer
         inout x2[] @loose;     // optional x2 manager
@@ -47,7 +48,8 @@ module LteNicBase like ILteNic
         string LteMacType;          // One of: "LteMacUe", "LteMacEnb", "LteMacEnbExperimental", "LteMacRelayUe", "LteMacRelayEnb"
         string LtePhyType;
         string nodeType;
-        bool d2dCapable;            // inherit the value from the parent module
+        //bool d2dCapable;            // inherit the value from the parent module
+        bool mode4Capable;
         
     gates:
         //#
@@ -75,7 +77,8 @@ module LteNicBase like ILteNic
         // RLC Layer
         rlc: LteRlc {
             @display("p=150,227");
-            d2dCapable = d2dCapable;
+            //d2dCapable = d2dCapable;
+            mode4Capable = mode4Capable;
         }
         // MAC Layer
         mac: <LteMacType> like LteMac {
@@ -152,6 +155,18 @@ module LteNicUeD2D extends LteNicBase
         dlFbGen: LteDlFeedbackGenerator {
             @display("p=50,50;is=s");
         }
+}
+
+// 
+// C-V2X capable Vehicular User Equipment of Lte Stack
+module LteNicVueV2X extends LteNicBase
+{
+    parameters:
+        LtePdcpRrcType = "LtePdcpRrcUeD2D";
+        LteMacType = default("LteMacVueV2X");
+        LtePhyType = "LtePhyVueV2X";
+
+        string d2dPeerAddresses = default("");  // list of D2D peer UEs, separated by blank spaces
 }
 
 //
