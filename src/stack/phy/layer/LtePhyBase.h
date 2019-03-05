@@ -76,8 +76,10 @@ class LtePhyBase : public ChannelAccess
     /** Pointer to the World Utility, to obtain some global information*/
     //BaseWorldUtility* world_;
     /** Statistics */
-    unsigned int numAirFrameReceived_;    /// number of LteAirFrame correctly received
-    unsigned int numAirFrameNotReceived_; /// number of LteAirFrame not received
+    unsigned int numAirFrameWithSCIsReceived_;    /// number of LteAirFrame correctly received
+    unsigned int numAirFrameWithSCIsNotReceived_; /// number of LteAirFrame not received
+    unsigned int numAirFrameWithTBsReceived_;
+    unsigned int numAirFrameWithTBsNotReceived_;
 
     /** Local device MacNodeId */
     MacNodeId nodeId_;

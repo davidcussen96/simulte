@@ -27,7 +27,7 @@ import lte.stack.handoverManager.LteHandoverManager;
 moduleinterface ILteNic extends IWirelessNic
 {
         string nodeType;
-        //bool d2dCapable;            // inherit the value from the parent module
+        bool d2dCapable;            // inherit the value from the parent module
         bool mode4Capable;
     gates:
         inout EUTRAN_RRC_Sap;   // Control of RRC Layer
@@ -45,10 +45,10 @@ module LteNicBase like ILteNic
         string interfaceTableModule;
         string routingTableModule;
         string LtePdcpRrcType;      // One of: "LtePdcpRrcUe", "LtePdcpRrcEnb", "LtePdcpRrcRelayUe", "LtePdcpRrcRelayEnb"
-        string LteMacType;          // One of: "LteMacUe", "LteMacEnb", "LteMacEnbExperimental", "LteMacRelayUe", "LteMacRelayEnb"
+        string LteMacType;          // One of: "LteMacVueV2X", "LteMacUe", "LteMacEnb", "LteMacEnbExperimental", "LteMacRelayUe", "LteMacRelayEnb"
         string LtePhyType;
         string nodeType;
-        //bool d2dCapable;            // inherit the value from the parent module
+        bool d2dCapable;            // inherit the value from the parent module
         bool mode4Capable;
         
     gates:
@@ -77,7 +77,7 @@ module LteNicBase like ILteNic
         // RLC Layer
         rlc: LteRlc {
             @display("p=150,227");
-            //d2dCapable = d2dCapable;
+            d2dCapable = d2dCapable;
             mode4Capable = mode4Capable;
         }
         // MAC Layer

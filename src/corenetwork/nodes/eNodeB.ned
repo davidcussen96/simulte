@@ -45,8 +45,9 @@ module eNodeB
         int macNodeId = default(0); // TODO: this is not a real parameter
         int macCellId = default(0);  // TODO: this is not a real parameter
         double txPower @unit(mw) = default(100mw);
-        bool d2dCapable = default(false);
+        bool d2dCapable = default(true);
         string nicType = d2dCapable ? "LteNicEnbD2D" : "LteNicEnb";
+        bool mode4Capable = default(true);
 
         //# Network Layer specs
         string networkLayerType = default("IPv4NetworkLayer");
@@ -89,6 +90,7 @@ module eNodeB
         lteNic: <nicType> like ILteNic {
             nodeType = nodeType;
             d2dCapable = d2dCapable;
+            mode4Capable = mode4Capable;
             @display("p=250,407");
         }
 

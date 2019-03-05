@@ -22,7 +22,6 @@ class LtePhyVueV2X : public LtePhyUeD2D
     // D2D Tx Power
     double d2dTxPower_;
     std::vector<std::vector<Subchannel*>> sensingWindow;
-    //std::vector<std::vector<Subchannel*>> sensingWindow(1000, std::vector<Subchannel*>(3, new Subchannel()));
     std::vector<Subchannel*> subchannelList;
     std::vector<LteAirFrame*> v2xReceivedFrames_; // airframes received in the current TTI. Only one will be decoded
     cMessage* v2xDecodingTimer_;                  // timer for triggering decoding at the end of the TTI. Started
@@ -37,6 +36,8 @@ class LtePhyVueV2X : public LtePhyUeD2D
     std::vector<Subchannel*> tbList;
     std::map<uint16_t, unsigned int> mcsMap;
     
+    LteRealisticChannelModel* channelModel_;
+
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();
     void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo);

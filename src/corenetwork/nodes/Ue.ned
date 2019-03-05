@@ -45,8 +45,12 @@ module Ue
         int macCellId = default(0); // TODO: this is not a real parameter
         
         //# D2D capability
-        bool d2dCapable = default(false);
-        string nicType = d2dCapable ? "LteNicUeD2D" : "LteNicUe";
+        //bool d2dCapable = default(false);
+        //string nicType = d2dCapable ? "LteNicUeD2D" : "LteNicUe";
+        
+        //# Mode 4 capability
+        bool mode4Capable = default(false);
+        string nicType = mode4Capable ? "LteNicVueV2" : "LteNicUe";
 
         //# Network Layer specs
         string networkLayerType = default("IPv4NetworkLayer");
@@ -83,7 +87,8 @@ module Ue
         }
         lteNic: <nicType> like ILteNic {
             nodeType = nodeType;
-            d2dCapable = d2dCapable;
+            //d2dCapable = d2dCapable;
+            mode4Capable = mode4Capable;
             @display("p=250,407");
         }
         // network layer

@@ -15,6 +15,7 @@
 #include "common/LteCommon.h"
 #include "corenetwork/nodes/ExtCell.h"
 #include "stack/phy/layer/LtePhyUe.h"
+#include "corenetwork/binder/PhyPisaData.h"
 
 // attenuation value to be returned if max. distance of a scenario has been violated
 // and tolerating the maximum distance violation is enabled
@@ -1564,6 +1565,155 @@ double LteRealisticChannelModel::jakesFading(MacNodeId nodeId, double speed,
     return linearToDb(re_h * re_h + im_h * im_h);
 }
 
+
+
+bool LteRealisticChannelModel::error(LteAirFrame *frame, UserControlInfo* lteInfo)
+{
+    EV << "LteRealisticChannelModel::error" << endl;
+
+    //get codeword
+    unsigned char cw = lteInfo->getCw();
+    //get number of codeword
+    int size = lteInfo->getUserTxParams()->readCqiVector().size();
+
+    //get position associated to the packet
+    Coord coord = lteInfo->getCoord();
+
+    //if total number of codeword is equal to 1 the cw index should be only 0
+    if (size == 1)
+        cw = 0;
+
+    //get cqi used to transmit this cw
+    Cqi cqi = lteInfo->getUserTxParams()->readCqiVector()[cw];
+
+    MacNodeId id;
+    Direction dir = (Direction) lteInfo->getDirection();
+
+    //Get MacNodeId of UE
+    if (dir == DL)
+        id = lteInfo->getDestId();
+    else
+        id = lteInfo->getSourceId();
+
+    // Get Number of RTX
+    unsigned char nTx = lteInfo->getTxNumber();
+
+    //consistency check
+    if (nTx == 0)
+        throw cRuntimeError("Transmissions counter should not be 0");
+
+    //Get txmode TODO Will we add SISO to TxMode
+    TxMode txmode = (TxMode) lteInfo->getTxMode();
+
+    // If rank is 1 and we used SMUX to transmit we have to corrupt this packet
+    if (txmode == CL_SPATIAL_MULTIPLEXING
+            || txmode == OL_SPATIAL_MULTIPLEXING)
+    {
+        //compare lambda min (smaller eingenvalues of channel matrix) with the threshold used to compute the rank
+        if (binder_->phyPisaData.getLambda(id, 1) < lambdaMinTh_)
+            return false;
+    }
+
+    // Take sinr
+    std::vector<double> snrV;
+    if (lteInfo->getDirection() == D2D || lteInfo->getDirection() == D2D_MULTI)
+    {
+        MacNodeId destId = lteInfo->getDestId();
+        Coord destCoord = myCoord_;
+        MacNodeId enbId = binder_->getNextHop(lteInfo->getSourceId());
+        snrV = getSINR_D2D(frame,lteInfo,destId,destCoord,enbId);
+    }
+    else
+    {
+        snrV = getSINR(frame, lteInfo);
+    }
+
+    //Get the resource Block id used to transmist this packet
+    RbMap rbmap = lteInfo->getGrantedBlocks();
+
+    //Get txmode
+    unsigned int itxmode = txModeToIndex[txmode];
+
+    double bler = 0;
+    std::vector<double> totalbler;
+    double finalSuccess = 1;
+    RbMap::iterator it;
+    std::map<Band, unsigned int>::iterator jt;
+
+    //for each Remote unit used to transmit the packet
+    for (it = rbmap.begin(); it != rbmap.end(); ++it)
+    {
+        //for each logical band used to transmit the packet
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt)
+        {
+            //this Rb is not allocated
+            if (jt->second == 0)
+                continue;
+
+            //check the antenna used in Das
+            if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
+                    || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
+                    && rbmap.size() > 1)
+                //we consider only the snr associated to the LB used
+                if (it->first != lteInfo->getCw())
+                    continue;
+
+            //Get the Bler
+            //if (cqi == 0 || cqi > 15)
+                //throw cRuntimeError("A packet has been transmitted with a cqi equal to 0 or greater than 15 cqi:%d txmode:%d dir:%d rb:%d cw:%d rtx:%d", cqi,lteInfo->getTxMode(),dir,jt->second,cw,nTx);
+            int snr = snrV[jt->first];//XXX because jt->first is a Band (=unsigned short)
+            if (snr < 0)
+                return false;
+            else if (snr > binder_->phyPisaData.maxSnr())
+                bler = 0;
+            else
+                // TODO This getBler has to incorporate mcs instead of cqi
+                bler = binder_->phyPisaData.getBler(itxmode, cqi - 1, snr);
+
+            EV << "\t bler computation: [itxMode=" << itxmode << "] - [cqi-1=" << cqi-1
+                    << "] - [snr=" << snr << "]" << endl;
+
+            double success = 1 - bler;
+            //compute the success probability according to the number of RB used
+            double successPacket = pow(success, (double)jt->second);
+            // compute the success probability according to the number of LB used
+            finalSuccess *= successPacket;
+
+            EV << " LteRealisticChannelModel::error direction " << dirToA(dir)
+                               << " node " << id << " remote unit " << dasToA((*it).first)
+                               << " Band " << (*jt).first << " SNR " << snr << " CQI " << cqi
+                               << " BLER " << bler << " success probability " << successPacket
+                               << " total success probability " << finalSuccess << endl;
+        }
+    }
+    //Compute total error probability
+    double per = 1 - finalSuccess;
+    //Harq Reduction
+    double totalPer = per * pow(harqReduction_, nTx - 1);
+
+    double er = uniform(getEnvir()->getRNG(0), 0.0, 1.0);
+
+
+    EV << " LteRealisticChannelModel::error direction " << dirToA(dir)
+                       << " node " << id << " total ERROR probability  " << per
+                       << " per with H-ARQ error reduction " << totalPer
+                       << " - CQI[" << cqi << "]- random error extracted[" << er << "]" << endl;
+
+    if (er <= totalPer)
+    {
+        EV << "This is NOT your lucky day (" << er << " < " << totalPer
+                << ") -> do not receive." << endl;
+        // Signal too weak, we can't receive it
+        return false;
+    }
+    // Signal is strong enough, receive this Signal
+    EV << "This is your lucky day (" << er << " > " << totalPer
+            << ") -> Receive AirFrame." << endl;
+    return true;
+}
+
+
+
 bool LteRealisticChannelModel::error(LteAirFrame *frame, UserControlInfo* lteInfo, int mcs)
 {
     EV << "LteRealisticChannelModel::error" << endl;
@@ -1666,22 +1816,22 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame, UserControlInfo* lteInf
             else
                 // TODO This getBler has to incorporate mcs instead of cqi
                 //bler = binder_->phyPisaData.getBler(itxmode, cqi - 1, snr);
-                bler = binder_->phyPisaData.getPuschBler(AWGN, SISO, mcs, snr);
+                bler = binder_->phyPisaData.GetPuschBler(SISO, mcs, snr);
 
-            EV << "\t bler computation: [itxMode=" << itxmode << "] - [cqi-1=" << cqi-1
-                    << "] - [snr=" << snr << "]" << endl;
+            //EV << "\t bler computation: [itxMode=" << itxmode << "] - [cqi-1=" << cqi-1
+              //      << "] - [snr=" << snr << "]" << endl;
 
             double success = 1 - bler;
             //compute the success probability according to the number of RB used
             double successPacket = pow(success, (double)jt->second);
             // compute the success probability according to the number of LB used
             finalSuccess *= successPacket;
-
+            /*
             EV << " LteRealisticChannelModel::error direction " << dirToA(dir)
                                << " node " << id << " remote unit " << dasToA((*it).first)
                                << " Band " << (*jt).first << " SNR " << snr << " CQI " << cqi
                                << " BLER " << bler << " success probability " << successPacket
-                               << " total success probability " << finalSuccess << endl;
+                               << " total success probability " << finalSuccess << endl;*/
         }
     }
     //Compute total error probability
@@ -1691,10 +1841,11 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame, UserControlInfo* lteInf
 
     double er = uniform(getEnvir()->getRNG(0), 0.0, 1.0);
 
+    /*
     EV << " LteRealisticChannelModel::error direction " << dirToA(dir)
                        << " node " << id << " total ERROR probability  " << per
                        << " per with H-ARQ error reduction " << totalPer
-                       << " - CQI[" << cqi << "]- random error extracted[" << er << "]" << endl;
+                       << " - CQI[" << cqi << "]- random error extracted[" << er << "]" << endl;*/
 
     if (er <= totalPer)
     {
@@ -1708,6 +1859,7 @@ bool LteRealisticChannelModel::error(LteAirFrame *frame, UserControlInfo* lteInf
             << ") -> Receive AirFrame." << endl;
     return true;
 }
+
 
 
 // TODO This looks like the method we should be extending.
@@ -1859,6 +2011,7 @@ bool LteRealisticChannelModel::error_D2D(LteAirFrame *frame, UserControlInfo* lt
 
     return true;
 }
+
 
 void LteRealisticChannelModel::computeLosProbability(double d,
         MacNodeId nodeId)

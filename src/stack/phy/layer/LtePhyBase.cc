@@ -36,15 +36,18 @@ void LtePhyBase::initialize(int stage)
         radioInGate_ = findGate("radioIn");
 
         // Initialize and watch statistics
-        numAirFrameReceived_ = numAirFrameNotReceived_ = 0;
+        numAirFrameWithSCIsReceived_ = numAirFrameWithSCIsNotReceived_ = 0;
+        numAirFrameWithTBsReceived_ = numAirFrameWithTBsNotReceived_ = 0;
         ueTxPower_ = par("ueTxPower");
         eNodeBtxPower_ = par("eNodeBTxPower");
         microTxPower_ = par("microTxPower");
         relayTxPower_ = par("relayTxPower");
 
         carrierFrequency_ = 2.1e+9;
-        WATCH(numAirFrameReceived_);
-        WATCH(numAirFrameNotReceived_);
+        WATCH(numAirFrameWithSCIsReceived_);
+        WATCH(numAirFrameWithSCIsNotReceived_);
+        WATCH(numAirFrameWithTBsReceived_);
+        WATCH(numAirFrameWithTBsNotReceived_);
     }
     else if (stage == inet::INITSTAGE_PHYSICAL_ENVIRONMENT_2)
     {
@@ -209,10 +212,15 @@ LteChannelModel* LtePhyBase::initializeDummyChannelModel(ParameterMap& params)
 void LtePhyBase::updateDisplayString()
 {
     char buf[80] = "";
-    if (numAirFrameReceived_ > 0)
-        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFrameReceived_);
-    if (numAirFrameNotReceived_ > 0)
-        sprintf(buf + strlen(buf), "af_no:%d ", numAirFrameNotReceived_);
+    if (numAirFrameWithSCIsReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFrameWithSCIsReceived_);
+    if (numAirFrameWithSCIsNotReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_no:%d ", numAirFrameWithSCIsNotReceived_);
+    getDisplayString().setTagArg("t", 0, buf);
+    if (numAirFrameWithTBsReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFrameWithTBsReceived_);
+    if (numAirFrameWithTBsNotReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_no:%d ", numAirFrameWithTBsNotReceived_);
     getDisplayString().setTagArg("t", 0, buf);
 }
 

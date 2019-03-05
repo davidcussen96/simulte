@@ -261,7 +261,8 @@ enum TxMode
     OL_SPATIAL_MULTIPLEXING,
     CL_SPATIAL_MULTIPLEXING,
     MULTI_USER,
-    UNKNOWN_TX_MODE
+    UNKNOWN_TX_MODE,
+    SISO    // TODO Added for MCS
 };
 
 struct TxTable
@@ -277,7 +278,8 @@ const TxTable txmodes[] = {
     ELEM(OL_SPATIAL_MULTIPLEXING),
     ELEM(CL_SPATIAL_MULTIPLEXING),
     ELEM(MULTI_USER),
-    ELEM(UNKNOWN_TX_MODE)
+    ELEM(UNKNOWN_TX_MODE),
+    ELEM(SISO)      // TODO Added for MCS
 };
 
 enum TxDirectionType
@@ -331,10 +333,10 @@ const FeedbackGeneratorTypeTable feedbackGeneratorTypeTable[] = {
 };
 
 /// Number of transmission modes in DL direction.
-const unsigned char DL_NUM_TXMODE = MULTI_USER + 1;
+const unsigned char DL_NUM_TXMODE = MULTI_USER + 1 + 1; // TODO Added for MCS???
 
 /// Number of transmission modes in UL direction.
-const unsigned char UL_NUM_TXMODE = MULTI_USER + 1;
+const unsigned char UL_NUM_TXMODE = MULTI_USER + 1 + 1; // TODO Added for MCS???
 
 /// OFDMA layers (see FIXME lteAllocationModuble.h for "layers" meaning)
 enum Plane

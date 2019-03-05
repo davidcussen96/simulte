@@ -3025,8 +3025,7 @@ double PhyPisaData::GetSinrValue (const double (*xtable)[XTABLE_SIZE], const dou
   return sinr;
 }
 
-TbErrorStats_t PhyPisaData::GetBler (const double (*xtable)[XTABLE_SIZE], const double (*ytable),
-        const uint16_t ysize, uint16_t mcs, uint8_t harq=1, double prevSinr, double newSinr)
+TbErrorStats_t PhyPisaData::GetBler(const double (*xtable)[XTABLE_SIZE], const double (*ytable), const uint16_t ysize, uint16_t mcs, uint8_t harq, double prevSinr, double newSinr)
 {
   //NS_LOG_FUNCTION (mcs << (uint16_t) harq << prevSinr << newSinr);
 
@@ -3073,19 +3072,19 @@ TbErrorStats_t PhyPisaData::GetBler (const double (*xtable)[XTABLE_SIZE], const 
 
 // txMode is always SISO
 // HarqProcessInfoList_t is empty
-TbErrorStats_t PhyPisaData::GetPuschBler (LteFadingModel fadingChannel, LteTxMode txmode=SISO, uint16_t mcs, double sinr)
+double PhyPisaData::GetPuschBler (TxMode txmode, uint16_t mcs, double sinr)
 {
   //Check mcs values
   if (mcs > 28)
     {
-      NS_FATAL_ERROR ("PUSCH modulation cannot exceed 28");
+      //NS_FATAL_ERROR ("PUSCH modulation cannot exceed 28");
     }
 
   //Find the table to use
   const double (*xtable)[XTABLE_SIZE];
   const double *ytable;
   double ysize = 0;
-
+  LteFadingModel fadingChannel = AWGN;
   switch (fadingChannel)
     {
     case AWGN:
@@ -3096,18 +3095,18 @@ TbErrorStats_t PhyPisaData::GetPuschBler (LteFadingModel fadingChannel, LteTxMod
           ytable = PuschAwgnSisoBlerCurveYaxis;
           ysize = PUSCH_AWGN_SIZE;
           break;
-        default:
-          NS_FATAL_ERROR ("Transmit mode " << txmode << " not supported in AWGN channel");
+        //default:
+          //NS_FATAL_ERROR ("Transmit mode " << txmode << " not supported in AWGN channel");
         }
       break;
-    default:
-      NS_FATAL_ERROR ("Fading channel " << fadingChannel << " not supported");
+    //default:
+      //NS_FATAL_ERROR ("Fading channel " << fadingChannel << " not supported");
     }
 
   TbErrorStats_t tbStat = GetBler(xtable, ytable, ysize, mcs, 0, 0,  sinr);
 
 
-  return tbStat;
+  return tbStat.tbler;
 }
 
 

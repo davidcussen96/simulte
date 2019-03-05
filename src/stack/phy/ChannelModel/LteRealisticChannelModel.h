@@ -202,7 +202,8 @@ class LteRealisticChannelModel : public LteChannelModel
      * @param frame pointer to the packet
      * @param lteinfo pointer to the user control info
      */
-    virtual bool error(LteAirFrame *frame, UserControlInfo* lteI);
+    virtual bool error(LteAirFrame *frame, UserControlInfo* lteI, int mcs);
+    virtual bool error (LteAirFrame *frame, UserControlInfo* lteI);
     /*
      * The same as before but used for das TODO to be implemnted
      *

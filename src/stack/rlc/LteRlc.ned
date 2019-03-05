@@ -16,8 +16,8 @@ package lte.stack.rlc;
 module LteRlc {
     parameters:
         @display("i=block/transport");      
-        string LteRlcUmType = default("LteRlcUmRealistic");          // One of: "LteRlcUm", "LteRlcUmRealistic", "LteRlcUmRealisticD2D"      
-        //bool d2dCapable;                                             // inherit the value from the parent module
+        string LteRlcUmType = default("LteRlcUmRealisticD2D");          // One of: "LteRlcUm", "LteRlcUmRealistic", "LteRlcUmRealisticD2D"      
+        bool d2dCapable;                                             // inherit the value from the parent module
         bool mode4Capable;
         //string umType = d2dCapable ? "LteRlcUmRealisticD2D" : LteRlcUmType;
         string umType = "LteRlcUmRealisticD2D";
@@ -191,6 +191,17 @@ simple LteRlcUmRealisticD2D extends LteRlcUm
         @class("LteRlcUmRealisticD2D");
         @display("i=block/wheelbarrow");
 }
+
+// 
+// UM Module (realistic) for the RLC layer of LTE Stack (with Mode 4 V2X).
+//
+simple LteRlcUmRealisticV2X extends LteRlcUm
+{
+    parameters:
+        @class("LteRlcUmRealisticV2X");
+        @display("i=block/wheelbarrow");
+}
+
 
 // 
 // AM Module for the RLC layer of LTE Stack.

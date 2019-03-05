@@ -82,7 +82,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
     virtual void macPduMake();
 
     virtual Subchannel* chooseCsrAtRandom(std::vector<Subchannel*> csrList);
-    virtual void sendSchedulingGrant();
+    //virtual void sendSchedulingGrant();
     virtual void sendCsrRequest();
 
   public:
@@ -94,6 +94,11 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
         return true;
     }
 
+    virtual bool isMode4Capable()
+    {
+        return true;
+    }
+
     virtual void triggerBsr(MacCid cid)
     {
         if (connDesc_[cid].getDirection() == D2D_MULTI)
@@ -101,7 +106,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
         else
             bsrTriggered_ = true;
     }
-    //virtual void doHandover(MacNodeId targetEnb);
+    virtual void doHandover(MacNodeId targetEnb);
 };
 
 

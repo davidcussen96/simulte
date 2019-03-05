@@ -12,6 +12,7 @@
 
 #include <string.h>
 #include <vector>
+#include "common/LteCommon.h"
 
 using namespace omnetpp;
 
@@ -42,9 +43,8 @@ class PhyPisaData
         AWGN
     };
 
-    //double getBler(int i, int j, int k){if (j==0) return 1; else return blerCurves_[i][j][k-1];}
-    TbErrorStats_t PhyPisaData::GetBler (const double (*xtable)[XTABLE_SIZE], const double (*ytable),
-            const uint16_t ysize, uint16_t mcs, uint8_t harq=1, double prevSinr, double newSinr);
+    double getBler(int i, int j, int k){if (j==0) return 1; else return blerCurves_[i][j][k-1];}
+    TbErrorStats_t GetBler(const double (*xtable)[XTABLE_SIZE], const double (*ytable), const uint16_t ysize, uint16_t mcs, uint8_t harq=1, double prevSinr=0.0, double newSinr=0.0);
     double getLambda(int i, int j){return lambdaTable_[i][j];}
     int nTxMode(){return 3;}
     int nMcs(){return 15;}
@@ -56,8 +56,7 @@ class PhyPisaData
     double GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*ytable), const uint16_t ysize, uint16_t mcs, uint8_t harq, double sinr);
     int16_t GetColIndex (double val, double min, double max, double step);
     int16_t GetRowIndex (uint16_t mcs, uint8_t harq);
-    TbErrorStats_t GetPuschBler (LteFadingModel fadingChannel, LteTxMode txmode=SISO,
-            uint16_t mcs, double sinr, HarqProcessInfoList_t harqHistory);
+    double GetPuschBler (TxMode txmode, uint16_t mcs, double sinr);
 };
 
 #endif

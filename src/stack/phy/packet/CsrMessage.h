@@ -10,9 +10,9 @@ private:
     std::vector<Subchannel*> csrList;
     
 public:
-    CsrMessage();
+    //CsrMessage();
 
-    CsrMessage(const char *name=nullptr, short kind=0);
+    //CsrMessage(const char *name=nullptr, short kind=0);
 
     virtual std::vector<Subchannel*> getCsrList()
     {

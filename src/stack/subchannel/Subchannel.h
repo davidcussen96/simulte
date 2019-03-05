@@ -24,7 +24,7 @@ public:
     Subchannel(int rsrp, int rssi, uint16_t sourceId, int subch);
 
     // Copy constructor
-    Subchannel(const Subchannel &s2);
+    Subchannel(const Subchannel &s2) {isFree = s2.isFree;}
 
     bool isRsrpLessThan(int Th);
 

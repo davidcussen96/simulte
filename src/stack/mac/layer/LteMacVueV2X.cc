@@ -35,11 +35,14 @@ void LteMacVueV2X::initialize(int stage)
         std::string pdcpType = getParentModule()->par("LtePdcpRrcType").stdstringValue();
         cModule* rlc = getParentModule()->getSubmodule("rlc");
         std::string rlcUmType = rlc->par("LteRlcUmType").stdstringValue();
-        bool rlcD2dCapable = rlc->par("d2dCapable").boolValue();
-        if (rlcUmType.compare("LteRlcUmRealistic") != 0 || !rlcD2dCapable)
-            throw cRuntimeError("LteMacUeRealisticD2D::initialize - %s module found, must be LteRlcUmRealisticD2D. Aborting", rlcUmType.c_str());
+        //bool rlcD2dCapable = rlc->par("d2dCapable").boolValue();
+        bool rlcMode4Capable = rlc->par("mode4Capable").boolValue();
+        //if (rlcUmType.compare("LteRlcUmRealistic") != 0 || !rlcD2dCapable)
+        if (rlcUmType.compare("LteRlcUmRealisticD2D") != 0 || !rlcMode4Capable)
+            throw cRuntimeError("LteMacVueV2X::initialize - %s module found, must be LteRlcUmRealisticD2D. Aborting", rlcUmType.c_str());
+        //if (pdcpType.compare("LtePdcpRrcUeD2D") != 0)
         if (pdcpType.compare("LtePdcpRrcUeD2D") != 0)
-            throw cRuntimeError("LteMacUeRealisticD2D::initialize - %s module found, must be LtePdcpRrcUeD2D. Aborting", pdcpType.c_str());
+            throw cRuntimeError("LteMacVueV2X::initialize - %s module found, must be LtePdcpRrcUeD2D. Aborting", pdcpType.c_str());
     }
     if (stage == inet::INITSTAGE_NETWORK_LAYER_3)
     {
@@ -305,7 +308,7 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
 {
     if (msg->isSelfMessage())
     {
-        LteMacUeRealistic::handleMessage(msg);
+        LteMacUeRealisticD2D::handleMessage(msg);
         return;
     }
 
@@ -320,12 +323,15 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
                     " from port " << pkt->getArrivalGate()->getName() << endl;
 
         CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
-        if (strcmp(csrMsg->getName(), "CsrList") == 0)
+        if (csrMsg)
         {
 
             currentCsr = chooseCsrAtRandom(csrMsg->getCsrList());
-
-            macHandleGrant();   // Creates a new grant
+            schedulingGrant_->setCsr(currentCsr);
+            periodCounter_=currentCsr->getSubframe() + schedulingGrant_->getResourceReservation();
+            //macHandleGrant();   // Creates a new grant
+            // TODO Could set periodic counter to when we want to transmit, say 50ms from now -> set periodic counter to 50
+            // Would need to be expiration_counter + 1 so we dont count down too soon.
         }
         return;
     }
@@ -335,6 +341,9 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
 
 void LteMacVueV2X::sendCsrRequest()
 {
+    // Create a grant before sending a request for a CSR.
+    // This partially configures the grant with the required fields
+    // needed to generate a CSR.
     macHandleGrant();
     CsrRequest* csrRequest = new CsrRequest("csrRequest");
 
@@ -362,6 +371,9 @@ Subchannel* LteMacVueV2X::chooseCsrAtRandom(std::vector<Subchannel*> csrList)
     int rand = distr(eng);
     Subchannel* csr = csrList[rand];
     // From here you must calculate when the grant has to be sent to lower layers.
+    cPacket* pkt = check_and_cast<cPacket*>(schedulingGrant_);
+    // Do we schedule a self message, scheduleAt(NOW+time of CSR)
+    sendLowerPackets(pkt);
     /*
     simtime_t now = NOW;
     int csrOccurredXmsAgo = csr->getSubframe();
@@ -381,6 +393,8 @@ void LteMacVueV2X::macHandleGrant()
     // delete old grant
     LteSchedulingGrantMode4* grant = new LteSchedulingGrantMode4();
     grant->setPriority(1);
+    // TODO Does this mean: schedulingGrant_.setPeriod(resourceReservation);
+    grant->setPeriod(100);
     grant->setResourceReservation(100);
 
     UserControlInfo* uinfo = new UserControlInfo();
@@ -579,6 +593,8 @@ void LteMacVueV2X::handleSelfMessage()
     // no grant available - if user has backlogged data, it will trigger scheduling request
     // no harq counter is updated since no transmission is sent.
 
+
+    // INITIALIZATION STAGE?
     if (schedulingGrant_==NULL)
     {
         EV << NOW << " LteMacUeRealisticD2D::handleSelfMessage " << nodeId_ << " NO configured grant" << endl;
@@ -589,7 +605,11 @@ void LteMacVueV2X::handleSelfMessage()
         std::uniform_int_distribution<> expCounter(5,15);
         expirationCounter_ = expCounter(eng);
 
-        sendCsrRequest();
+        sendCsrRequest();   // TODO Will this all complete before the next self message is called.
+                            // That is partially configure grant, csrRequest to Phy, Phy chooses CSR
+                            // and sends back to MAC, MAC attaches CSR to grant.
+        // TODO We only want to start the expCounter when we first send our grant at time indicated by the CSR, or do we?
+
     }
     else if (schedulingGrant_->getPeriodic())
     {
@@ -603,6 +623,8 @@ void LteMacVueV2X::handleSelfMessage()
             if (p == 1) {
                 std::uniform_int_distribution<> expCounter(5, 15);
                 expirationCounter_ = expCounter(eng);
+                // TODO Where do i set the period counter of grant?
+                //schedulingGrant_.setPeriod(resourceReservation)
             } else {
                 // Periodic grant is expired
                 delete schedulingGrant_;
@@ -624,6 +646,7 @@ void LteMacVueV2X::handleSelfMessage()
             // TODO Send grant here
 
         }
+        // TODO Send grant here??
     }
 
     bool requestSdu = false;
@@ -938,10 +961,10 @@ void LteMacVueV2X::macHandleD2DModeSwitch(cPacket* pkt)
     delete pkt;
 }
 
-/*
-void LteMacUeRealisticD2D::doHandover(MacNodeId targetEnb)
+
+void LteMacVueV2X::doHandover(MacNodeId targetEnb)
 {
     enb_ = check_and_cast<LteMacEnbRealisticD2D*>(getMacByMacNodeId(targetEnb));
     LteMacUeRealistic::doHandover(targetEnb);
 }
-*/
+

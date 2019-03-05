@@ -27,12 +27,6 @@ Subchannel::Subchannel(int rp, int ri, uint16_t sid, int subch)
     subchannel = subch;
 }
 
-// Copy constructor
-Subchannel::Subchannel(const Subchannel &s2)
-{
-    isFree = s2.isFree;
-}
-
 
 bool Subchannel::isRsrpLessThan(int Th)
 {
