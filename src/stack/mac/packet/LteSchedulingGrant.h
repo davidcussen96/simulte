@@ -155,7 +155,7 @@ public:
     }
     
     virtual unsigned int getPriority() {return priority;}
-    virtual unsigned int setPriority(unsigned int p) {priority = p;}
+    virtual void setPriority(unsigned int p) {priority = p;}
     
     virtual unsigned int getResourceReservation()
     {
