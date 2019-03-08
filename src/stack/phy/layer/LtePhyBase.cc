@@ -64,10 +64,11 @@ void LtePhyBase::handleMessage(cMessage* msg)
         handleSelfMessage(msg);
     }
     // AirFrame
+    /*
     else if (msg->getArrivalGate()->getId() == radioInGate_)
     {
         handleAirFrame(msg);
-    }
+    }*/
 
     // message from stack
     else if (msg->getArrivalGate()->getId() == upperGateIn_)

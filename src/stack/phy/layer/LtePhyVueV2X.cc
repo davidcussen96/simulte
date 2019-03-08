@@ -133,7 +133,18 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
     bool notSensedChecked = false, wrapped;
     pRsvpTxPrime = pStep * pRsvpTx / 100;
 
-    std::vector<std::vector<Subchannel*>> Sa(100, std::vector<Subchannel*>(numSubchannels, new Subchannel()));
+    std::vector<std::vector<Subchannel*>> Sa;
+    // Initialize set Sa.
+    for (int i = 0; i < 100; i++)
+    {
+        std::vector<Subchannel*> temp;
+        for (int j = 0; j < numSubchannels; j++)
+        {
+            Subchannel* s = new Subchannel();
+            temp.push_back(s);
+        }
+        Sa.push_back(temp);
+    }
 
     do
     {
@@ -141,7 +152,8 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
         wrapped = false;
         /*
          * Iterate through sensing window starting at pointerToEnd and finishing at current. (reverse)
-         * Special Condition: C=0, E=999. When frame = 0
+         * Special Condition: C=0, E=999.
+         *
          */
 
         for (int frame = pointerToEnd; frame != current || !wrapped; frame--)
@@ -149,32 +161,36 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
             subchIndex = 0;
             for (int channel = 0; channel < numSubchannels; channel++)
             {
+                // Is the subchannel not sensed? If it is
                 if (sensingWindow[frame][channel]->getNotSensed())
                 {
+                    // Condition to skip over not sensed subchannels in same subframe. If the first one is not sensed the rest are not sensed also.
+                    /*
                     if (notSensedChecked)
                     {
                         numCsrs -= numNotSensed;
-                    } else {
-                        for (unsigned int y = 0; y < 100; y++)
+                    } else {*/
+                    // Determine overlapping subframes which the current notSensed subframe.
+                    for (unsigned int y = 0; y < 100; y++)
+                    {
+                        for (unsigned int j = 0; j < cResel; j++)
                         {
-                            for (unsigned int j = 0; j < cResel; j++)
+                            if (y + (j*pRsvpTxPrime) == -(msAgo) + pStep*k*q)
                             {
-                                if (y + (j*pRsvpTxPrime) == -(msAgo) + pStep*k*q)
+                                for (int z = 0; z < numSubchannels; z++)
                                 {
-                                    for (int z = 0; z < numSubchannels; z++)
-                                    {
-                                        Sa[y][z]->setNotSensed(true);
-                                    }
-                                    numCsrs -= numSubchannels;
-                                    numNotSensed += numSubchannels;
-
-                                    j = cResel, y = 100, channel = numSubchannels;
+                                    Sa[y][z]->setNotSensed(true);
                                 }
+                                numCsrs -= numSubchannels;      // TODO ?? Duplicated
+                                numNotSensed += numSubchannels;
+
+                                j = cResel, y = 100, channel = numSubchannels;
                             }
                         }
-                        notSensedChecked = true;
+                    //}
+                        //notSensedChecked = true;
                     }
-                } else if (!(sensingWindow[frame][channel]->getIsFree()))
+                } else if (!(sensingWindow[frame][channel]->getIsFree()))       // Subchannel is not free.
                 {
                     prioRx = sensingWindow[frame][channel]->getSci()->getPriority();
                     pRsvpRx = sensingWindow[frame][channel]->getSci()->getResourceRes();
@@ -210,12 +226,14 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
             msAgo--;
             if (frame == 0)
             {
-                frame = 999;
-                if (current != 0) wrapped = true;
+                wrapped = true;
+                // Special condition: If current=0 and pointerToEnd=999, then we dont want to wraparound and reset frame to 999.
+                if (current != 0) frame = 999;
+                else frame = 1;
             }
         }
         thresAddition += 3;
-    } while (numCsrs < 60);       // 0.2 * 300
+    } while (numCsrs < 60);       // 0.2 * 400
 
     std::vector< tuple<int,int,int>> rssiValues;
     std::vector<Subchannel*> listOfCsrs;
@@ -249,7 +267,10 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
     int size = listOfCsrs.size();
     // While the number of CSRs available to send to the MAC layer < 80 continually add
     // CSRs with the lowest RSSI values.
-    while (size < 80)
+    bool b;
+    if (rssiValues.size() > 0) b = true;
+    else b = false;     // There are no CSRs in rssiValues.
+    while (size < 80 && b)
     {
         currentRssi = rssiValues.back();
         rssiValues.pop_back();
