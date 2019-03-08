@@ -325,13 +325,14 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
         CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
         if (csrMsg)
         {
-
+            csrReceived = true;
             currentCsr = chooseCsrAtRandom(csrMsg->getCsrList());
-            schedulingGrant_->setCsr(currentCsr);
-            periodCounter_=currentCsr->getSubframe() + schedulingGrant_->getResourceReservation();
-            //macHandleGrant();   // Creates a new grant
-            // TODO Could set periodic counter to when we want to transmit, say 50ms from now -> set periodic counter to 50
-            // Would need to be expiration_counter + 1 so we dont count down too soon.
+            LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(schedulingGrant_);
+            grant->setCsr(currentCsr);
+            periodCounter_ = currentCsr->getSubframe();
+
+            //expirationCounter_ = currentCsr->getSubframe() + schedulingGrant_->getResourceReservation()
+              //      + schedulingGrant_->getPeriod();     // simtime() + (RRI x RC)
         }
         return;
     }
@@ -348,8 +349,9 @@ void LteMacVueV2X::sendCsrRequest()
     CsrRequest* csrRequest = new CsrRequest("csrRequest");
 
     csrRequest->setCResel(schedulingGrant_->getExpiration());
-    csrRequest->setPrioTx(schedulingGrant_->getPriority());
-    csrRequest->setPRsvpTx(schedulingGrant_->getResourceReservation());
+    LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(schedulingGrant_);
+    csrRequest->setPrioTx(grant->getPriority());
+    csrRequest->setPRsvpTx(grant->getResourceReservation());
 
     UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
@@ -357,9 +359,8 @@ void LteMacVueV2X::sendCsrRequest()
     uinfo->setDirection(DL);
     uinfo->setFrameType(CSRREQUEST);
     csrRequest->setControlInfo(uinfo);
-    // Have to check and cast csr request to packet in order to send using function sendLowerPackets
-    cPacket* pkt = check_and_cast<cPacket*>(csrRequest);
-    sendLowerPackets(pkt);
+
+    sendLowerPackets(csrRequest);
 }
 
 Subchannel* LteMacVueV2X::chooseCsrAtRandom(std::vector<Subchannel*> csrList)
@@ -370,19 +371,6 @@ Subchannel* LteMacVueV2X::chooseCsrAtRandom(std::vector<Subchannel*> csrList)
 
     int rand = distr(eng);
     Subchannel* csr = csrList[rand];
-    // From here you must calculate when the grant has to be sent to lower layers.
-    cPacket* pkt = check_and_cast<cPacket*>(schedulingGrant_);
-    // Do we schedule a self message, scheduleAt(NOW+time of CSR)
-    sendLowerPackets(pkt);
-    /*
-    simtime_t now = NOW;
-    int csrOccurredXmsAgo = csr->getSubframe();
-    int csrSubchannel = csr->getSubchannel();
-    int rri = grant->getResourceRes();  // 100
-    int whatSubframeToTransmitIn = rri - csrOccurredXmsAgo;
-    simtime_t timeToTranmsit = now + (whatSubframeToTransmit/1000);
-    */
-
     return csr;
 }
 
@@ -391,16 +379,25 @@ void LteMacVueV2X::macHandleGrant()
     EV << NOW << " LteMacUeRealisticD2D::macHandleGrant - UE [" << nodeId_ << "] - Grant received " << endl;
 
     // delete old grant
-    LteSchedulingGrantMode4* grant = new LteSchedulingGrantMode4();
-    grant->setPriority(1);
-    // TODO Does this mean: schedulingGrant_.setPeriod(resourceReservation);
+    LteSchedulingGrantMode4 *grant = new LteSchedulingGrantMode4();
+    Direction dir = (Direction)D2D;
+    grant->setDirection(dir);
     grant->setPeriod(100);
+    grant->setPriority(1);
     grant->setResourceReservation(100);
+
+    std::random_device rd;
+    std::mt19937 eng(rd());
+    std::uniform_int_distribution<> expCounter(5,15);
+    grant->setExpiration(expCounter(eng));
+
+    // Set periodic to true so that periodCounter and expirationCounter get set.
+    grant->setPeriodic(true);
 
     UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
     uinfo->setDestId(getMacCellId());
-    uinfo->setDirection(DL);
+    uinfo->setDirection(D2D);
     uinfo->setFrameType(GRANTPKT);
     grant->setControlInfo(uinfo);
 
@@ -599,59 +596,55 @@ void LteMacVueV2X::handleSelfMessage()
     {
         EV << NOW << " LteMacUeRealisticD2D::handleSelfMessage " << nodeId_ << " NO configured grant" << endl;
 
-        // if necessary, a RAC request will be sent to obtain a grant
-        std::random_device rd;
-        std::mt19937 eng(rd());
-        std::uniform_int_distribution<> expCounter(5,15);
-        expirationCounter_ = expCounter(eng);
-
-        sendCsrRequest();   // TODO Will this all complete before the next self message is called.
+        sendCsrRequest();   // Will this all complete before the next self message is called.
                             // That is partially configure grant, csrRequest to Phy, Phy chooses CSR
                             // and sends back to MAC, MAC attaches CSR to grant.
-        // TODO We only want to start the expCounter when we first send our grant at time indicated by the CSR, or do we?
 
-    }
-    else if (schedulingGrant_->getPeriodic())
+    } else if (csrReceived) // We only want to start the expCounter when we first send our grant at time indicated by the CSR.
     {
-        // Periodic checks
-        if(--expirationCounter_ == 0)
+        if (schedulingGrant_->getPeriodic())
         {
-            std::random_device rd;
-            std::mt19937 eng(rd());
-            std::uniform_int_distribution<> distr(0,5);
-            int p = distr(eng);
-            if (p == 1) {
-                std::uniform_int_distribution<> expCounter(5, 15);
-                expirationCounter_ = expCounter(eng);
-                // TODO Where do i set the period counter of grant?
-                //schedulingGrant_.setPeriod(resourceReservation)
-            } else {
-                // Periodic grant is expired
-                delete schedulingGrant_;
-                schedulingGrant_ = NULL;
-                // if necessary, a RAC request will be sent to obtain a grant
-                sendCsrRequest();
+            // Periodic checks
+            if(--expirationCounter_ == 0)
+            {
+
+                // Send grant to PHY layer.
+                schedulingGrant_->setName("grant");
+                sendLowerPackets(schedulingGrant_);
+
+                std::random_device rd;
+                std::mt19937 eng(rd());
+                std::uniform_int_distribution<> distr(0,5);
+                int p = distr(eng);
+                if (p == 1) {
+                    std::uniform_int_distribution<> expCounter(5, 15);
+                    expirationCounter_ = expCounter(eng);
+                } else {
+                    // Periodic grant is expired
+                    //delete schedulingGrant_;
+                    schedulingGrant_ = NULL;
+                    csrReceived = false;
+                    sendCsrRequest();
+                }
+
             }
-
+            else if (--periodCounter_>0)
+            {
+                return;
+            }
+            else
+            {
+                // resetting grant period
+                periodCounter_=schedulingGrant_->getPeriod();
+            }
         }
-        else if (--periodCounter_>0)
-        {
-            return;
-        }
-        else
-        {
-            // resetting grant period
-            periodCounter_=schedulingGrant_->getPeriod();
-            // this is periodic grant TTI - continue with frame sending
-            // TODO Send grant here
-
-        }
-        // TODO Send grant here??
     }
+
 
     bool requestSdu = false;
-    if (schedulingGrant_!=NULL) // if a grant is configured
-    {
+    //if (schedulingGrant_!=NULL and csrReceived) // if a grant is configured. A grant can be partially configured
+    if (schedulingGrant_!=NULL and csrReceived)
+    {                                           // But only when a CSR is received is it fully configured.
         if(!firstTx)
         {
             EV << "\t currentHarq_ counter initialized " << endl;
@@ -660,7 +653,8 @@ void LteMacVueV2X::handleSelfMessage()
 //            currentHarq_ = harqRxBuffers_.begin()->second->getProcesses() - 2;
             currentHarq_ = UE_TX_HARQ_PROCESSES - 2;
         }
-        EV << "\t " << schedulingGrant_ << endl;
+        //EV << "\t " << schedulingGrant_ << endl;
+        EV << "\t " << "schedulingGrant_" << endl;
 
         EV << NOW << " LteMacUeRealisticD2D::handleSelfMessage " << nodeId_ << " entered scheduling" << endl;
 

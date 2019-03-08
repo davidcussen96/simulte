@@ -10,10 +10,6 @@ private:
     std::vector<Subchannel*> csrList;
     
 public:
-    //CsrMessage();
-
-    //CsrMessage(const char *name=nullptr, short kind=0);
-
     virtual std::vector<Subchannel*> getCsrList()
     {
         return csrList;
@@ -21,5 +17,8 @@ public:
     virtual void setCsrList(std::vector<Subchannel*> c)
     {
         csrList = c;
+    }
+    CsrMessage_Base *dup() const{
+        return new CsrMessage(*this);
     }
 };    

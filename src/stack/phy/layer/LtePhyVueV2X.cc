@@ -23,10 +23,10 @@ Define_Module(LtePhyVueV2X);
 
 LtePhyVueV2X::LtePhyVueV2X()
 {
-    /*
+
     handoverStarter_ = NULL;
     handoverTrigger_ = NULL;
-    */
+
 }
 
 LtePhyVueV2X::~LtePhyVueV2X()
@@ -128,36 +128,24 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
 
 void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
 {
-    int pRsvpTxPrime, prioRx, k, lSubch, pRsvpRx, pStep, thresAddition,
-    numSubch, numCsrs, subchIndex, numNotSensed = 0, q, msAgo, thIndex, riv, Th;
+    int pRsvpTxPrime = 0, prioRx = 0, k = 1, lSubch = 1, pRsvpRx, pStep = 100, thresAddition = 0,
+    numSubch = numSubchannels, numCsrs, subchIndex, numNotSensed = 0, q = 1, msAgo = 1000, thIndex, riv, Th;
     bool notSensedChecked = false, wrapped;
+    pRsvpTxPrime = pStep * pRsvpTx / 100;
 
     std::vector<std::vector<Subchannel*>> Sa(100, std::vector<Subchannel*>(numSubchannels, new Subchannel()));
 
     do
     {
         numCsrs = 300;
-        pStep = 100;
-
-        pRsvpTxPrime = pStep * pRsvpTx / 100;
-        k = 1;
-        q = 1;
-
-        lSubch = 1;
-        numSubch = numSubchannels;
-
-        thresAddition = 0;
-        msAgo = 1000;
         wrapped = false;
+        /*
+         * Iterate through sensing window starting at pointerToEnd and finishing at current. (reverse)
+         * Special Condition: C=0, E=999. When frame = 0
+         */
 
-        for (int frame = pointerToEnd; frame != pointerToEnd || !wrapped; ++frame)
+        for (int frame = pointerToEnd; frame != current || !wrapped; frame--)
         {
-            if (frame == 999)
-            {
-                frame = 0;
-                wrapped = true;
-            }
-
             subchIndex = 0;
             for (int channel = 0; channel < numSubchannels; channel++)
             {
@@ -186,7 +174,7 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
                         }
                         notSensedChecked = true;
                     }
-                } else if (!sensingWindow[frame][channel]->getIsFree())
+                } else if (!(sensingWindow[frame][channel]->getIsFree()))
                 {
                     prioRx = sensingWindow[frame][channel]->getSci()->getPriority();
                     pRsvpRx = sensingWindow[frame][channel]->getSci()->getResourceRes();
@@ -220,6 +208,11 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
                 subchIndex++;
             }
             msAgo--;
+            if (frame == 0)
+            {
+                frame = 999;
+                if (current != 0) wrapped = true;
+            }
         }
         thresAddition += 3;
     } while (numCsrs < 60);       // 0.2 * 300
@@ -253,11 +246,15 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
     sort(rssiValues.begin(), rssiValues.end());
 
     tuple<int,int,int> currentRssi;
-    while (listOfCsrs.size() < 60)
+    int size = listOfCsrs.size();
+    // While the number of CSRs available to send to the MAC layer < 80 continually add
+    // CSRs with the lowest RSSI values.
+    while (size < 80)
     {
         currentRssi = rssiValues.back();
         rssiValues.pop_back();
         listOfCsrs.push_back(Sa[get<1>(currentRssi)][get<2>(currentRssi)]);
+        size = listOfCsrs.size();;
     }
 
     // Send list of Csrs to MAC layer.
@@ -325,19 +322,18 @@ void LtePhyVueV2X::handleAirFrame(cMessage* msg)
 void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 {
     UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());
-    CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);  // TODO Should always check_and_cast because csrRequest inherits from cMessage.
 
-
-    // Received a grant so send sci and data packet
-    if (strcmp(msg->getName(), "scheduling grant") == 0)
+    // Received a grant so send sci and data packet (if received).
+    if (strcmp(msg->getName(), "grant") == 0)
     {
+
         LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(msg);
         // Received a grant so we create an SCI.
         Sci* sci = new Sci(grant->getPriority(), grant->getResourceReservation());
         // Extract csr from grant.
         // Subchannel* csr = grant->getCsr();      // TODO Should the lteInfo contain on what subchannel to transmit our CSR.
         LteAirFrame* sciFrame = new LteAirFrame("SCI");
-        sciFrame->encapsulate(check_and_cast<cPacket*>(sci));
+        sciFrame->encapsulate(sci);
         sciFrame->setSchedulingPriority(airFramePriority_);
         sciFrame->setDuration(TTI);
         // set current position
@@ -372,16 +368,13 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 
         lteInfo->setTxPower(txPower_);
         lteInfo->setD2dTxPower(d2dTxPower_);
-        // TODO Does this contain whats RBs to use?
         dataFrame->setControlInfo(lteInfo);
 
-    } else if (strcmp(csrRequest->getName(), "csrRequest") == 0)
+    } else if (lteInfo->getFrameType() == CSRREQUEST)
     {
-        //timeRequested = NOW;
+        CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
         chooseCsr(csrRequest->getPrioTx(), csrRequest->getPRsvpTx(), csrRequest->getCResel());
-        return;
     }
-
 }
 
 void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
@@ -652,11 +645,7 @@ void LtePhyVueV2X::sendFeedback(LteFeedbackDoubleVector fbDl, LteFeedbackDoubleV
     uinfo->setCoord(getRadioPosition());
 
     frame->setControlInfo(uinfo);
-    //TODO access speed data Update channel index
-//    if (coherenceTime(move.getSpeed())<(NOW-lastFeedback_)){
-//        deployer_->channelIncrease(nodeId_);
-//        deployer_->lambdaIncrease(nodeId_,1);
-//    }
+
     lastFeedback_ = NOW;
     EV << "LtePhy: " << nodeTypeToA(nodeType_) << " with id "
        << nodeId_ << " sending feedback to the air channel" << endl;

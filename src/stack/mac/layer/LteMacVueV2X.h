@@ -14,7 +14,6 @@
 #include "stack/mac/buffer/harq_d2d/LteHarqBufferTxD2D.h"
 #include "stack/subchannel/Subchannel.h"
 
-class LteSchedulingGrantMode4;
 class LteSchedulerUeUl;
 class LteBinder;
 
@@ -33,8 +32,8 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
     UserTxParams* preconfiguredTxParams_;
     UserTxParams* getPreconfiguredTxParams();  // build and return new user tx params
 
-    LteSchedulingGrantMode4* schedulingGrant_;
     Subchannel* currentCsr;
+    bool csrReceived = false;
 
   protected:
 

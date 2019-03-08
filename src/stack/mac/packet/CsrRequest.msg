@@ -13,7 +13,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 //
 
-packet CsrRequest extends cMessage
+packet CsrRequest extends cPacket
 {
     int cResel;
     int prioTx;

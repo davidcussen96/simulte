@@ -11,7 +11,7 @@ private:
     int rsrp;
     int rssi;
     bool notSensed;
-    bool isFree = true;
+    bool isFree;
     int subframe;
     int subchannel;
     uint16_t sourceId;
