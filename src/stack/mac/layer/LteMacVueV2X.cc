@@ -585,6 +585,9 @@ void LteMacVueV2X::macHandleRac(cPacket* pkt)
 
 void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
 {
+    // This is just a small comment to make sure git is working properly
+    // Same
+    // Same
     FlowControlInfo* lteInfo = check_and_cast<FlowControlInfo*>(pkt->getControlInfo());
     MacCid cid = idToMacCid(lteInfo->getDestId(), lteInfo->getLcid());
 
