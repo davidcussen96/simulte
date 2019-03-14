@@ -11,7 +11,7 @@
 #include "stack/phy/packet/CsrMessage.h"
 #include "stack/subchannel/Subchannel.h"
 #include "stack/mac/packet/CsrRequest_m.h"
-#include <random>
+#include <stdlib.h>
 
 Define_Module(LteMacVueV2X);
 
@@ -79,14 +79,17 @@ LteMacPdu* LteMacVueV2X::makeBsr(int size){
     return macPkt;
 }
 
+// TODO Need to modify this maybe?
 void LteMacVueV2X::macPduMake()
 {
     int64 size = 0;
 
     macPduList_.clear();
 
+    // We dont use BSRs?
     bool bsrAlreadyMade = false;
     // UE is in D2D-mode but it received an UL grant (for BSR)
+    // Mode 4 always in D2D-mode: delete-> Wont receive BSR.
     if ((bsrTriggered_ || bsrD2DMulticastTriggered_) && schedulingGrant_->getDirection() == UL && scheduleList_->empty())
     {
         // Compute BSR size taking into account only DM flows
@@ -157,21 +160,22 @@ void LteMacVueV2X::macPduMake()
             Codeword cw = it->first.second;
 
             // get the direction (UL/D2D/D2D_MULTI) and the corresponding destination ID
-            FlowControlInfo* lteInfo = &(connDesc_.at(destCid));
-            MacNodeId destId = lteInfo->getDestId();
+            FlowControlInfo* lteInfo = &(connDesc_.at(destCid));    // Always D2D
+            MacNodeId destId = lteInfo->getDestId();    // Multi-group ID.
             Direction dir = (Direction)lteInfo->getDirection();
 
             std::pair<MacNodeId, Codeword> pktId = std::pair<MacNodeId, Codeword>(destId, cw);
             unsigned int sduPerCid = it->second;
 
             MacPduList::iterator pit = macPduList_.find(pktId);
-
+            // ??
             if (sduPerCid == 0 && !bsrTriggered_ && !bsrD2DMulticastTriggered_)
             {
                 continue;
             }
 
             // No packets for this user on this codeword
+            // Only one codeword, 0 or 1??
             if (pit == macPduList_.end())
             {
                 // Always goes here because of the macPduList_.clear() at the beginning
@@ -325,12 +329,14 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
         CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
         if (csrMsg)
         {
-            csrReceived = true;
             currentCsr = chooseCsrAtRandom(csrMsg->getCsrList());
+
+            // currentCsr has a subframe and subchannel variable to determine when in the selection window it occurred and
+            // in what RBs
             LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(schedulingGrant_);
             grant->setCsr(currentCsr);
             periodCounter_ = currentCsr->getSubframe();
-
+            csrReceived = true;
             //expirationCounter_ = currentCsr->getSubframe() + schedulingGrant_->getResourceReservation()
               //      + schedulingGrant_->getPeriod();     // simtime() + (RRI x RC)
         }
@@ -365,12 +371,9 @@ void LteMacVueV2X::sendCsrRequest()
 
 Subchannel* LteMacVueV2X::chooseCsrAtRandom(std::vector<Subchannel*> csrList)
 {
-    std::random_device rd;
-    std::mt19937 eng(rd());
-    std::uniform_int_distribution<> distr(0, csrList.size()-1);
-
-    int rand = distr(eng);
-    Subchannel* csr = csrList[rand];
+    int csrListSize = csrList.size();
+    int index = rand() % csrListSize; // 0 --> csrList.size()-1
+    Subchannel* csr = csrList[index];
     return csr;
 }
 
@@ -385,11 +388,10 @@ void LteMacVueV2X::macHandleGrant()
     grant->setPeriod(100);
     grant->setPriority(1);
     grant->setResourceReservation(100);
+    grant->setCodewords(1);
 
-    std::random_device rd;
-    std::mt19937 eng(rd());
-    std::uniform_int_distribution<> expCounter(5,15);
-    grant->setExpiration(expCounter(eng));
+    int exp = rand() % 11 + 5;;
+    grant->setExpiration(exp);
 
     // Set periodic to true so that periodCounter and expirationCounter get set.
     grant->setPeriodic(true);
@@ -405,8 +407,8 @@ void LteMacVueV2X::macHandleGrant()
 
     if (schedulingGrant_!=NULL)
     {
-        delete schedulingGrant_;
         schedulingGrant_ = NULL;
+        delete schedulingGrant_;
     }
 
     // store received grant
@@ -421,6 +423,50 @@ void LteMacVueV2X::macHandleGrant()
     EV << NOW << "Node " << nodeId_ << " received grant of blocks " << grant->getTotalGrantedBlocks()
        << ", bytes " << grant->getGrantedCwBytes(0) <<" Direction: "<<dirToA(grant->getDirection()) << endl;
 
+}
+
+void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int period)
+{
+    // delete old grant
+        LteSchedulingGrantMode4 *grant = new LteSchedulingGrantMode4();
+        Direction dir = (Direction)D2D;
+        grant->setDirection(dir);
+        grant->setPeriod(100);
+        grant->setPriority(1);
+        grant->setResourceReservation(100);
+        grant->setCodewords(1);
+
+        grant->setPeriod(period);
+        grant->setExpiration(expCounter);
+
+        // Set periodic to true so that periodCounter and expirationCounter get set.
+        grant->setPeriodic(true);
+
+        UserControlInfo* uinfo = new UserControlInfo();
+        uinfo->setSourceId(getMacNodeId());
+        uinfo->setDestId(getMacCellId());
+        uinfo->setDirection(D2D);
+        uinfo->setFrameType(GRANTPKT);
+        grant->setControlInfo(uinfo);
+
+        if (schedulingGrant_!=NULL)
+        {
+            schedulingGrant_ = NULL;
+            delete schedulingGrant_;
+        }
+
+        // store grant
+        schedulingGrant_=grant;
+        /*
+        if (grant->getPeriodic())
+        {
+            periodCounter_=grant->getPeriod();
+            expirationCounter_=grant->getExpiration();
+        }
+
+        EV << NOW << "Node " << nodeId_ << " received grant of blocks " << grant->getTotalGrantedBlocks()
+           << ", bytes " << grant->getGrantedCwBytes(0) <<" Direction: "<<dirToA(grant->getDirection()) << endl;
+        */
 }
 
 void LteMacVueV2X::checkRAC()
@@ -537,6 +583,43 @@ void LteMacVueV2X::macHandleRac(cPacket* pkt)
     delete racPkt;
 }
 
+void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
+{
+    FlowControlInfo* lteInfo = check_and_cast<FlowControlInfo*>(pkt->getControlInfo());
+    MacCid cid = idToMacCid(lteInfo->getDestId(), lteInfo->getLcid());
+
+    // Before we bufferize packet we need to determine size of packet and then set scheduling grants message size.
+    if (strcmp(pkt->getName(), "newDataPkt") == 0)
+    {
+        int64_t pktSize = pkt->getByteLength();
+        // Now we need to set the scheduling grant. What method is used ?? setGrantedCwBytes() ??
+        if (schedulingGrant_ && csrReceived)
+        {
+            schedulingGrant_->setGrantedCwBytes(0, pktSize);
+        }
+    }
+
+    // bufferize packet
+    bufferizePacket(pkt);
+
+    if (strcmp(pkt->getName(), "lteRlcFragment") == 0)
+    {
+        // new MAC SDU has been received
+        if (pkt->getByteLength() == 0)
+            delete pkt;
+
+        // creates pdus from schedule list and puts them in harq buffers.
+        macPduMake();
+
+        EV << NOW << " LteMacUeRealistic::handleUpperMessage - incrementing counter for HARQ processes " << (unsigned int)currentHarq_ << " --> " << (currentHarq_+1)%harqProcesses_ << endl;
+        currentHarq_ = (currentHarq_+1)%harqProcesses_;
+    }
+    else
+    {
+        delete pkt;
+    }
+}
+
 
 void LteMacVueV2X::handleSelfMessage()
 {
@@ -604,45 +687,45 @@ void LteMacVueV2X::handleSelfMessage()
     {
         if (schedulingGrant_->getPeriodic())
         {
-            // Periodic checks
-            if(--expirationCounter_ == 0)
+            if (periodCounter_ > 0)
             {
-
-                // Send grant to PHY layer.
-                schedulingGrant_->setName("grant");
+                periodCounter_ -= 1;
+            } else // equal to zero
+            {
+                createIntermediateGrant(schedulingGrant_->getExpiration(), schedulingGrant_->getPeriod());
+                // Creates a new grant with control info because control info is removed in PHY layer.
                 sendLowerPackets(schedulingGrant_);
-
-                std::random_device rd;
-                std::mt19937 eng(rd());
-                std::uniform_int_distribution<> distr(0,5);
-                int p = distr(eng);
-                if (p == 1) {
-                    std::uniform_int_distribution<> expCounter(5, 15);
-                    expirationCounter_ = expCounter(eng);
-                } else {
-                    // Periodic grant is expired
-                    //delete schedulingGrant_;
-                    schedulingGrant_ = NULL;
-                    csrReceived = false;
-                    sendCsrRequest();
+                if (--expirationCounter_ == 0)
+                {
+                    /*std::random_device rd;
+                    std::mt19937 eng(rd());
+                    std::uniform_int_distribution<> distr(0,5);
+                    int p = distr(eng);*/
+                    int p = rand() % 5 + 1;
+                    if (p == 1) {
+                        /*std::random_device rd2;
+                        std::mt19937 eng2(rd2());
+                        std::uniform_int_distribution<> expCounter(5, 15);
+                        expirationCounter_ = expCounter(eng2);*/
+                        expirationCounter_ = rand() % 11 + 5;
+                    } else {
+                        // Periodic grant is expired
+                        csrReceived = false;
+                        sendCsrRequest();
+                    }
                 }
-
-            }
-            else if (--periodCounter_>0)
-            {
-                return;
-            }
-            else
-            {
-                // resetting grant period
-                periodCounter_=schedulingGrant_->getPeriod();
+                else    // expiration counter is NOT equal to 0
+                {
+                    // resetting grant period
+                    periodCounter_=schedulingGrant_->getPeriod();
+                }
             }
         }
     }
 
 
     bool requestSdu = false;
-    //if (schedulingGrant_!=NULL and csrReceived) // if a grant is configured. A grant can be partially configured
+    // if a grant is configured. A grant can be partially configured
     if (schedulingGrant_!=NULL and csrReceived)
     {                                           // But only when a CSR is received is it fully configured.
         if(!firstTx)
@@ -688,7 +771,7 @@ void LteMacVueV2X::handleSelfMessage()
         if(!retx)
         {
             scheduleList_ = lcgScheduler_->schedule();
-            if ((bsrTriggered_ || bsrD2DMulticastTriggered_) && scheduleList_->empty())
+            if (scheduleList_->empty())
             {
                 // no connection scheduled, but we can use this grant to send a BSR to the eNB
                 macPduMake();
@@ -961,4 +1044,3 @@ void LteMacVueV2X::doHandover(MacNodeId targetEnb)
     enb_ = check_and_cast<LteMacEnbRealisticD2D*>(getMacByMacNodeId(targetEnb));
     LteMacUeRealistic::doHandover(targetEnb);
 }
-
