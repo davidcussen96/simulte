@@ -55,6 +55,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
 
     virtual void macHandleGrant();
 
+    virtual void createIntermediateGrant(unsigned int expCounter, unsigned int period);
     /*
      * Checks RAC status
      */
@@ -68,6 +69,8 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
     void macHandleD2DModeSwitch(cPacket* pkt);
 
     virtual LteMacPdu* makeBsr(int size);
+
+    virtual void handleUpperMessage(cPacket* pkt);
 
     /**
      * macPduMake() creates MAC PDUs (one for each CID)
