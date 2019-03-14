@@ -36,6 +36,8 @@ class LtePhyVueV2X : public LtePhyUeD2D
     std::vector<Subchannel*> tbList;
     std::map<uint16_t, unsigned int> mcsMap;
     
+    bool notSensedFlag = false;
+
     LteRealisticChannelModel* channelModel_;
 
     void storeAirFrame(LteAirFrame* newFrame);
