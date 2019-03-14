@@ -39,8 +39,8 @@ class LteSchedulingGrant : public LteSchedulingGrant_Base
 
         if (userTxParams != NULL)
         {
-            delete userTxParams;
             userTxParams = NULL;
+            delete userTxParams;
         }
     }
 
@@ -148,13 +148,14 @@ private:
 
 public:
 
-    virtual ~LteSchedulingGrantMode4(){
-
-        if (csr != NULL)
+    ~LteSchedulingGrantMode4()
+    {
+        if (csr != nullptr)
         {
-            delete csr;
             csr = NULL;
+            delete csr;
         }
+
     }
     virtual void setCsr(Subchannel* subchannel)
     {
