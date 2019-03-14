@@ -4,6 +4,7 @@
 Subchannel::Subchannel()
 {
     isFree = true;
+    notSensed = false;
 }
 
 Subchannel::Subchannel(Sci* s, int rp, int ri, uint16_t sid, int subch)
@@ -28,12 +29,13 @@ Subchannel::Subchannel(int rp, int ri, uint16_t sid, int subch)
 }
 
 
-bool Subchannel::isRsrpLessThan(int Th)
+bool Subchannel::isRsrpGreaterThan(int Th)
 {
-    if (getRsrp() < Th)
+    if (getRsrp() > Th)
     {
         return true;
     }
+    this->setRsrpLessThan(true); // Less than Th?
     return false;
 }
 
