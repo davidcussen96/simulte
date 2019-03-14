@@ -15,6 +15,7 @@ private:
     int subframe;
     int subchannel;
     uint16_t sourceId;
+    bool rsrpLessThan;    // less than Th?
 
 public:
     Subchannel();
@@ -23,10 +24,20 @@ public:
 
     Subchannel(int rsrp, int rssi, uint16_t sourceId, int subch);
 
+    // Destructor
+    ~Subchannel()
+    {
+        if (sci != nullptr)
+        {
+            sci = NULL;
+            delete sci;
+        }
+    }
+
     // Copy constructor
     Subchannel(const Subchannel &s2) {isFree = s2.isFree;}
 
-    bool isRsrpLessThan(int Th);
+    bool isRsrpGreaterThan(int Th);
 
     //RbMap getRbMap() {return rbmap;}
     Sci* getSci() {return sci;}
@@ -51,6 +62,9 @@ public:
     friend Subchannel operator+(Subchannel &s1, Subchannel &s2);
 
     Subchannel* add(Subchannel* sc);
+
+    bool getRsrpLessThan() {return rsrpLessThan;}
+    void setRsrpLessThan(bool b) {rsrpLessThan = b;}
 };
 
 //Subchannel* operator+(Subchannel& a, Subchannel& b);
