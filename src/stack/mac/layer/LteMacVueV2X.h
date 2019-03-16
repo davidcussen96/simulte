@@ -55,7 +55,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
 
     virtual void macHandleGrant();
 
-    virtual void createIntermediateGrant(unsigned int expCounter, unsigned int period);
+    virtual void createIntermediateGrant(unsigned int expCounter, unsigned int period, Subchannel* subch);
     /*
      * Checks RAC status
      */

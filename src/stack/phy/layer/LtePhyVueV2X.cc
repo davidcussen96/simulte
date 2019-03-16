@@ -193,10 +193,7 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
             for (int channel = 0; channel < numSubchannels; channel++)
             {
                 // Is the subchannel not sensed? If it is
-
                 if (sensingWindow[frame][channel]->getNotSensed() == 1)
-                //if (sensingWindow[frame][channel]->getNotSensed())
-
                 {
                     // Condition to skip over not sensed subchannels in same subframe. If the first one is not sensed the rest are not sensed also.
                     /*
@@ -220,7 +217,6 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
 
                             }
                         }
-                    //}
                         //notSensedChecked = true;
                     }
                 } else if (sensingWindow[frame][channel]->getIsFree() == 0)       // Subchannel is not free.
@@ -379,13 +375,50 @@ void LtePhyVueV2X::handleAirFrame(cMessage* msg)
     return;                          // exit the function, decoding will be done later
 }
 
+
+RbMap LtePhyVueV2X::getRbMap(unsigned int sub, bool isSci)
+{
+    // subchannel : {0,3}
+    // 1 + 10*subchannel & 2 + 10*subchannel + 3->10
+    // 11&12 + 13->20
+    // 21&22 + 23->30
+    // 31&32 + 32->40
+
+    //std::map<Remote, std::map<Band, unsigned int>> grantedBlocks;
+    RbMap grantedBlocks;
+    if (isSci)  // 2 Rb's
+    {
+        std::map<Band, unsigned int> tempSci;
+        for (unsigned short i = 1; i < 3; i++)
+        {
+            Band band = i+10*sub;
+            tempSci[band] = 1;
+            //grantedBlocks[MACRO][i+10*sub] = 1;
+        }
+        //grantedBlocks[0] = temp;
+        grantedBlocks.emplace(MACRO, tempSci);
+    } else // 8 Rb's
+    {
+        std::map<Band, unsigned int> temp;
+        for (unsigned short j = 3; j < 11; j++)
+        {
+            Band band = j+10*sub;
+            temp[band] = 1;
+            //grantedBlocks[MACRO][j+10*sub] = 1;
+        }
+        //grantedBlocks[0] = temp;
+        grantedBlocks.emplace(MACRO, temp);
+    }
+
+    return grantedBlocks;
+}
+
 void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
 {
-    UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());
+    UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(msg->removeControlInfo());      // This needs to contain RbMap
 
     // Received a grant so send sci and data packet (if received).
     // TODO We need to update the sensing window with the CSR we've chosen.
-
     if (lteInfo->getFrameType() == GRANTPKT)
     {
 
@@ -402,7 +435,9 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         sciFrame->setDuration(TTI);
         // set current position
         lteInfo->setCoord(getRadioPosition());
-
+        int s = grant->getCsr()->getSubchannel();
+        RbMap rbmap = getRbMap(s, true);
+        lteInfo->setGrantedBlocks(rbmap);
         lteInfo->setTxPower(txPower_);
         lteInfo->setD2dTxPower(d2dTxPower_);
         sciFrame->setControlInfo(lteInfo);
@@ -410,6 +445,8 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         sendBroadcast(sciFrame);
         if (strcmp(dataFrame->getName(), "empty frame") != 0)
         {
+            lteInfoData->setGrantedBlocks(getRbMap(grant->getCsr()->getSubchannel(), false));
+            dataFrame->setControlInfo(lteInfoData);
             sendBroadcast(dataFrame);
         }
         dataFrame = new LteAirFrame("empty frame");
@@ -422,17 +459,16 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         // create LteAirFrame and encapsulate the received packet
 
         dataFrame->encapsulate(check_and_cast<cPacket*>(msg));
-
+        lteInfoData = lteInfo;
+        lteInfoData->setCoord(getRadioPosition());
+        lteInfoData->setTxPower(txPower_);
+        lteInfoData->setD2dTxPower(d2dTxPower_);
         // initialize frame fields
         dataFrame->setName("data frame");
         dataFrame->setSchedulingPriority(airFramePriority_);
         dataFrame->setDuration(TTI);
         // set current position
-        lteInfo->setCoord(getRadioPosition());
 
-        lteInfo->setTxPower(txPower_);
-        lteInfo->setD2dTxPower(d2dTxPower_);
-        dataFrame->setControlInfo(lteInfo);
 
     } else if (lteInfo->getFrameType() == CSRREQUEST)
     {
@@ -477,9 +513,9 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
             if (subchannelIndex == -1)
             {
                 if (jt->second == 1 or jt->second == 3) subchannelIndex = 0;
-                else if (jt->second == 13 or jt->second == 15) subchannelIndex = 1;
-                else if (jt->second == 25 or jt->second == 27) subchannelIndex = 2;
-                else subchannelIndex = 3;
+                else if (jt->second == 11 or jt->second == 13) subchannelIndex = 1;
+                else if (jt->second == 21 or jt->second == 23) subchannelIndex = 2;
+                else if (jt->second == 31 or jt->second == 33) subchannelIndex = 3;
             }
 
             rsrp += rsrpVector.at(band);

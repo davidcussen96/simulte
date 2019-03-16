@@ -32,6 +32,7 @@ class LtePhyVueV2X : public LtePhyUeD2D
     int current = 0;
     simtime_t timeRequested;
     LteAirFrame* dataFrame = new LteAirFrame("empty frame");
+    UserControlInfo* lteInfoData;
     std::vector<Subchannel*> sciList;
     std::vector<Subchannel*> tbList;
     std::map<uint16_t, unsigned int> mcsMap;
@@ -53,6 +54,7 @@ class LtePhyVueV2X : public LtePhyUeD2D
     virtual void updatePointers();
     virtual int calculateRiv(int lSubch, int numSubch, int startSubchIndex);
     virtual void chooseCsr(int prioTx, int pRsvpTx, int cResel);
+    virtual RbMap getRbMap(unsigned int sub, bool isSci);
 
 
   public:

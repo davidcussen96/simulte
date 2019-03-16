@@ -149,9 +149,9 @@ void LteMacVueV2X::macPduMake()
     if(!bsrAlreadyMade)
     {
         // In a D2D communication if BSR was created above this part isn't executed
-        // Build a MAC PDU for each scheduled user on each codeword
+        // Build a MAC PDU for each scheduled user on each codeword -> Build one MAC PDU for broadcast
         LteMacScheduleList::const_iterator it;
-        for (it = scheduleList_->begin(); it != scheduleList_->end(); it++)
+        for (it = scheduleList_->begin(); it != scheduleList_->end(); it++)     //->scheduleList is empty
         {
             LteMacPdu* macPkt;
             cPacket* pkt;
@@ -240,7 +240,7 @@ void LteMacVueV2X::macPduMake()
             }
         }
     }
-
+    // Just want to put one in?
     // Put MAC PDUs in H-ARQ buffers
     MacPduList::iterator pit;
     for (pit = macPduList_.begin(); pit != macPduList_.end(); pit++)
@@ -388,7 +388,7 @@ void LteMacVueV2X::macHandleGrant()
     grant->setPeriod(100);
     grant->setPriority(1);
     grant->setResourceReservation(100);
-    grant->setCodewords(1);
+    grant->setCodewords(0);
 
     int exp = rand() % 11 + 5;;
     grant->setExpiration(exp);
@@ -425,7 +425,7 @@ void LteMacVueV2X::macHandleGrant()
 
 }
 
-void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int period)
+void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int period, Subchannel* subch)
 {
     // delete old grant
         LteSchedulingGrantMode4 *grant = new LteSchedulingGrantMode4();
@@ -434,7 +434,8 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
         grant->setPeriod(100);
         grant->setPriority(1);
         grant->setResourceReservation(100);
-        grant->setCodewords(1);
+        grant->setCodewords(0);
+        grant->setCsr(subch);
 
         grant->setPeriod(period);
         grant->setExpiration(expCounter);
@@ -458,12 +459,6 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
         // store grant
         schedulingGrant_=grant;
         /*
-        if (grant->getPeriodic())
-        {
-            periodCounter_=grant->getPeriod();
-            expirationCounter_=grant->getExpiration();
-        }
-
         EV << NOW << "Node " << nodeId_ << " received grant of blocks " << grant->getTotalGrantedBlocks()
            << ", bytes " << grant->getGrantedCwBytes(0) <<" Direction: "<<dirToA(grant->getDirection()) << endl;
         */
@@ -585,9 +580,6 @@ void LteMacVueV2X::macHandleRac(cPacket* pkt)
 
 void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
 {
-    // This is just a small comment to make sure git is working properly
-    // Same
-    // Same
     FlowControlInfo* lteInfo = check_and_cast<FlowControlInfo*>(pkt->getControlInfo());
     MacCid cid = idToMacCid(lteInfo->getDestId(), lteInfo->getLcid());
 
@@ -695,21 +687,14 @@ void LteMacVueV2X::handleSelfMessage()
                 periodCounter_ -= 1;
             } else // equal to zero
             {
-                createIntermediateGrant(schedulingGrant_->getExpiration(), schedulingGrant_->getPeriod());
+                LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(schedulingGrant_);
+                createIntermediateGrant(schedulingGrant_->getExpiration(), schedulingGrant_->getPeriod(), grant->getCsr());
                 // Creates a new grant with control info because control info is removed in PHY layer.
                 sendLowerPackets(schedulingGrant_);
                 if (--expirationCounter_ == 0)
                 {
-                    /*std::random_device rd;
-                    std::mt19937 eng(rd());
-                    std::uniform_int_distribution<> distr(0,5);
-                    int p = distr(eng);*/
                     int p = rand() % 5 + 1;
                     if (p == 1) {
-                        /*std::random_device rd2;
-                        std::mt19937 eng2(rd2());
-                        std::uniform_int_distribution<> expCounter(5, 15);
-                        expirationCounter_ = expCounter(eng2);*/
                         expirationCounter_ = rand() % 11 + 5;
                     } else {
                         // Periodic grant is expired
@@ -728,6 +713,7 @@ void LteMacVueV2X::handleSelfMessage()
 
 
     bool requestSdu = false;
+    // TODO Should this not be done every TTI, seems wasteful
     // if a grant is configured. A grant can be partially configured
     if (schedulingGrant_!=NULL and csrReceived)
     {                                           // But only when a CSR is received is it fully configured.
@@ -777,11 +763,11 @@ void LteMacVueV2X::handleSelfMessage()
             if (scheduleList_->empty())
             {
                 // no connection scheduled, but we can use this grant to send a BSR to the eNB
-                macPduMake();
+                macPduMake();       // Always called.
             }
             else
             {
-                requestSdu = macSduRequest(); // return a bool
+                requestSdu = macSduRequest(); // return a bool -> Never called
             }
 
         }
