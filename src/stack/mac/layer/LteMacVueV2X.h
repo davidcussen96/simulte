@@ -34,6 +34,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
 
     Subchannel* currentCsr;
     bool csrReceived = false;
+    bool dataPktReceived = false;
 
   protected:
 
@@ -55,7 +56,9 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
 
     virtual void macHandleGrant();
 
-    virtual void createIntermediateGrant(unsigned int expCounter, unsigned int period, Subchannel* subch);
+    virtual void createIntermediateGrant(unsigned int expCounter, unsigned int period, Subchannel* subch, const RbMap& rbmap);
+
+    virtual RbMap getFullRbMap(unsigned int subch);
     /*
      * Checks RAC status
      */
@@ -70,7 +73,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
 
     virtual LteMacPdu* makeBsr(int size);
 
-    virtual void handleUpperMessage(cPacket* pkt);
+    //virtual void handleUpperMessage(cPacket* pkt);
 
     /**
      * macPduMake() creates MAC PDUs (one for each CID)
@@ -84,7 +87,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
     virtual void macPduMake();
 
     virtual Subchannel* chooseCsrAtRandom(std::vector<Subchannel*> csrList);
-    //virtual void sendSchedulingGrant();
+
     virtual void sendCsrRequest();
 
   public:

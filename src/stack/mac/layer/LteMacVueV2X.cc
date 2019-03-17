@@ -90,6 +90,7 @@ void LteMacVueV2X::macPduMake()
     bool bsrAlreadyMade = false;
     // UE is in D2D-mode but it received an UL grant (for BSR)
     // Mode 4 always in D2D-mode: delete-> Wont receive BSR.
+    // NEVER TRIGGERED!!
     if ((bsrTriggered_ || bsrD2DMulticastTriggered_) && schedulingGrant_->getDirection() == UL && scheduleList_->empty())
     {
         // Compute BSR size taking into account only DM flows
@@ -145,24 +146,25 @@ void LteMacVueV2X::macPduMake()
             bsrTriggered_ = false;
         }
     }
-
+    // ALWAYS EXECUTED!!
     if(!bsrAlreadyMade)
     {
         // In a D2D communication if BSR was created above this part isn't executed
         // Build a MAC PDU for each scheduled user on each codeword -> Build one MAC PDU for broadcast
+
         LteMacScheduleList::const_iterator it;
         for (it = scheduleList_->begin(); it != scheduleList_->end(); it++)     //->scheduleList is empty
         {
             LteMacPdu* macPkt;
             cPacket* pkt;
 
-            MacCid destCid = it->first.first;
-            Codeword cw = it->first.second;
+            MacCid destCid = it->first.first;   // IS THERE A BROADCAST destCid
+            Codeword cw = it->first.second;     // ALWAYS 0
 
             // get the direction (UL/D2D/D2D_MULTI) and the corresponding destination ID
-            FlowControlInfo* lteInfo = &(connDesc_.at(destCid));    // Always D2D
-            MacNodeId destId = lteInfo->getDestId();    // Multi-group ID.
-            Direction dir = (Direction)lteInfo->getDirection();
+            FlowControlInfo* lteInfo = &(connDesc_.at(destCid));
+            MacNodeId destId = lteInfo->getDestId();    // MULTI GROUP ID??
+            Direction dir = (Direction)lteInfo->getDirection();     // ALWAYS D2D
 
             std::pair<MacNodeId, Codeword> pktId = std::pair<MacNodeId, Codeword>(destId, cw);
             unsigned int sduPerCid = it->second;
@@ -306,6 +308,166 @@ void LteMacVueV2X::macPduMake()
             txBuf->insertPdu(txList.first,cw, macPkt);
         }
     }
+/*
+    int64 size = 0;
+
+    macPduList_.clear();
+
+    // UE is in D2D-mode but it received an UL grant (for BSR)
+    // Mode 4 always in D2D-mode: delete-> Wont receive BSR.
+
+    // In a D2D communication if BSR was created above this part isn't executed
+    // Build a MAC PDU for each scheduled user on each codeword -> Build one MAC PDU for broadcast
+
+    //LteMacScheduleList::const_iterator it;
+    LteMacPdu* macPkt;
+    cPacket* pkt;
+
+    MacCid destCid = 1025;//it->first.first;   // IS THERE A BROADCAST destCid
+    Codeword cw = 0;//it->first.second;     // ALWAYS 0
+
+    // get the direction (UL/D2D/D2D_MULTI) and the corresponding destination ID
+    //FlowControlInfo* lteInfo = &(connDesc_.at(destCid));
+    MacNodeId destId = 1025; //lteInfo->getDestId();    // MULTI GROUP ID??
+    Direction dir = D2D;//(Direction)lteInfo->getDirection();     // ALWAYS D2D
+
+    std::pair<MacNodeId, Codeword> pktId = std::pair<MacNodeId, Codeword>(destId, cw);
+    unsigned int sduPerCid = 1;//it->second;
+
+    //MacPduList::iterator pit = macPduList_.find(pktId);
+
+    // ??
+    if (sduPerCid == 0 && !bsrTriggered_ && !bsrD2DMulticastTriggered_)
+    {
+        continue;
+    }
+
+    // No packets for this user on this codeword
+    // Only one codeword, 0 or 1??
+
+    // Always goes here because of the macPduList_.clear() at the beginning
+    // Build the Control Element of the MAC PDU
+    UserControlInfo* uinfo = new UserControlInfo();
+    uinfo->setSourceId(getMacNodeId());
+    uinfo->setDestId(destId);
+    uinfo->setLcid(MacCidToLcid(destCid));
+    uinfo->setDirection(dir);
+    uinfo->setLcid(MacCidToLcid(SHORT_BSR));
+    if (usePreconfiguredTxParams_)
+        uinfo->setUserTxParams(preconfiguredTxParams_->dup());
+    else
+        uinfo->setUserTxParams(schedulingGrant_->getUserTxParams()->dup());
+    // Create a PDU
+    macPkt = new LteMacPdu("LteMacPdu");
+    macPkt->setHeaderLength(MAC_HEADER);
+    macPkt->setControlInfo(uinfo);
+    macPkt->setTimestamp(NOW);
+    macPduList_[pktId] = macPkt;
+
+
+    while (sduPerCid > 0)
+    {
+        // Add SDU to PDU
+        // Find Mac Pkt
+        //if (mbuf_.find(destCid) == mbuf_.end())
+          //  throw cRuntimeError("Unable to find mac buffer for cid %d", destCid);
+
+        //if (mbuf_[destCid]->empty())
+          //  throw cRuntimeError("Empty buffer for cid %d, while expected SDUs were %d", destCid, sduPerCid);
+
+        pkt = mbuf_[destCid]->popFront();
+
+        // multicast support
+        // this trick gets the group ID from the MAC SDU and sets it in the MAC PDU
+        int32 groupId = check_and_cast<LteControlInfo*>(pkt->getControlInfo())->getMulticastGroupId();
+        if (groupId >= 0) // for unicast, group id is -1
+            check_and_cast<LteControlInfo*>(macPkt->getControlInfo())->setMulticastGroupId(groupId);
+
+        drop(pkt);
+
+        macPkt->pushSdu(pkt);
+        sduPerCid--;
+    }
+
+    // consider virtual buffers to compute BSR size
+    size += macBuffers_[destCid]->getQueueOccupancy();
+
+    if (size > 0)
+    {
+        // take into account the RLC header size
+        if (connDesc_[destCid].getRlcType() == UM)
+            size += RLC_HEADER_UM;
+        else if (connDesc_[destCid].getRlcType() == AM)
+            size += RLC_HEADER_AM;
+    }
+
+    // Just want to put one in?
+    // Put MAC PDUs in H-ARQ buffers
+    MacPduList::iterator pit;
+    for (pit = macPduList_.begin(); pit != macPduList_.end(); pit++)
+    {
+        MacNodeId destId = pit->first.first;
+        Codeword cw = pit->first.second;
+        // Check if the HarqTx buffer already exists for the destId
+        // Get a reference for the destId TXBuffer
+        LteHarqBufferTx* txBuf;
+        HarqTxBuffers::iterator hit = harqTxBuffers_.find(destId);
+        if ( hit != harqTxBuffers_.end() )
+        {
+            // The tx buffer already exists
+            txBuf = hit->second;
+        }
+        else
+        {
+            // The tx buffer does not exist yet for this mac node id, create one
+            LteHarqBufferTx* hb;
+            // FIXME: hb is never deleted
+            UserControlInfo* info = check_and_cast<UserControlInfo*>(pit->second->getControlInfo());
+            if (info->getDirection() == UL)
+                hb = new LteHarqBufferTx((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) getMacByMacNodeId(destId));
+            else // D2D or D2D_MULTI
+                hb = new LteHarqBufferTxD2D((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) getMacByMacNodeId(destId));
+            harqTxBuffers_[destId] = hb;
+            txBuf = hb;
+        }
+
+        // search for an empty unit within current harq process
+        UnitList txList = txBuf->getEmptyUnits(currentHarq_);
+        EV << "LteMacUeRealisticD2D::macPduMake - [Used Acid=" << (unsigned int)txList.first << "] , [curr=" << (unsigned int)currentHarq_ << "]" << endl;
+
+        //Get a reference of the LteMacPdu from pit pointer (extract Pdu from the MAP)
+        //LteMacPdu* macPkt = pit->second;
+
+        // Attach BSR to PDU if RAC is won and wasn't already made
+
+        if ((bsrTriggered_ || bsrD2DMulticastTriggered_) && !bsrAlreadyMade )
+        {
+            MacBsr* bsr = new MacBsr();
+            bsr->setTimestamp(simTime().dbl());
+            bsr->setSize(size);
+            macPkt->pushCe(bsr);
+            bsrTriggered_ = false;
+            bsrD2DMulticastTriggered_ = false;
+            EV << "LteMacUeRealisticD2D::macPduMake - BSR created with size " << size << endl;
+        }
+
+        EV << "LteMacUeRealisticD2D: pduMaker created PDU: " << macPkt->info() << endl;
+
+        // TODO: harq test
+        // pdu transmission here (if any)
+        // txAcid has HARQ_NONE for non-fillable codeword, acid otherwise
+        if (txList.second.empty())
+        {
+            EV << "LteMacUeRealisticD2D() : no available process for this MAC pdu in TxHarqBuffer" << endl;
+            delete macPkt;
+        }
+        else
+        {
+            //Insert PDU in the Harq Tx Buffer
+            //txList.first is the acid
+            txBuf->insertPdu(txList.first,cw, macPkt);
+        }
+    }*/
 }
 
 void LteMacVueV2X::handleMessage(cMessage* msg)
@@ -323,7 +485,7 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
     {
         //UserControlInfo *userInfo = check_and_cast<UserControlInfo *>(pkt->getControlInfo());
 
-        EV << "LteMacUeRealisticD2D::handleMessage - Received packet " << pkt->getName() <<
+        EV << "LteMacVueV2X::handleMessage - Received packet " << pkt->getName() <<
                     " from port " << pkt->getArrivalGate()->getName() << endl;
 
         CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
@@ -334,16 +496,45 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
             // currentCsr has a subframe and subchannel variable to determine when in the selection window it occurred and
             // in what RBs
             LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(schedulingGrant_);
+            // Set Grants Full RbMap
             grant->setCsr(currentCsr);
+            const RbMap rbmap = getFullRbMap(grant->getCsr()->getSubchannel());
+            grant->setGrantedBlocks(rbmap);
+            grant->setTotalGrantedBlocks(10);
             periodCounter_ = currentCsr->getSubframe();
             csrReceived = true;
             //expirationCounter_ = currentCsr->getSubframe() + schedulingGrant_->getResourceReservation()
               //      + schedulingGrant_->getPeriod();     // simtime() + (RRI x RC)
-        }
-        return;
+            return;
+        } /*else if (userInfo->getFrameType() == D2DMODESWITCHPKT)
+        {
+            EV << "LteMacUeRealisticD2D::handleMessage - Received packet " << pkt->getName() <<
+            " from port " << pkt->getArrivalGate()->getName() << endl;
+
+            // message from PHY_to_MAC gate (from lower layer)
+            emit(receivedPacketFromLowerLayer, pkt);
+
+            // call handler
+            macHandleD2DModeSwitch(pkt);
+
+            return;
+        }*/
     }
 
     LteMacUeRealistic::handleMessage(msg);
+}
+
+RbMap LteMacVueV2X::getFullRbMap(unsigned int subch)
+{
+    RbMap grantedBlocks;
+    std::map<Band, unsigned int> temp;
+    for (unsigned short i = 1; i < 3; i++)
+    {
+        Band band = i+10*subch;
+        temp[band] = 1;
+    }
+    grantedBlocks.emplace(MACRO, temp);
+    return grantedBlocks;
 }
 
 void LteMacVueV2X::sendCsrRequest()
@@ -388,7 +579,14 @@ void LteMacVueV2X::macHandleGrant()
     grant->setPeriod(100);
     grant->setPriority(1);
     grant->setResourceReservation(100);
-    grant->setCodewords(0);
+    grant->setCodewords(1);
+    grant->setTotalGrantedBlocks(10);
+
+    if (dataPktReceived)
+    {
+        unsigned int grantedCwBytes = schedulingGrant_->getGrantedCwBytes(0);
+        grant->setGrantedCwBytes(0, grantedCwBytes);
+    }
 
     int exp = rand() % 11 + 5;;
     grant->setExpiration(exp);
@@ -398,7 +596,7 @@ void LteMacVueV2X::macHandleGrant()
 
     UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
-    uinfo->setDestId(getMacCellId());
+    uinfo->setDestId(getMacCellId());       //?? Is this the destination ??
     uinfo->setDirection(D2D);
     uinfo->setFrameType(GRANTPKT);
     grant->setControlInfo(uinfo);
@@ -425,7 +623,7 @@ void LteMacVueV2X::macHandleGrant()
 
 }
 
-void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int period, Subchannel* subch)
+void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int period, Subchannel* subch, const RbMap& rbmap)
 {
     // delete old grant
         LteSchedulingGrantMode4 *grant = new LteSchedulingGrantMode4();
@@ -434,8 +632,9 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
         grant->setPeriod(100);
         grant->setPriority(1);
         grant->setResourceReservation(100);
-        grant->setCodewords(0);
+        grant->setCodewords(1);
         grant->setCsr(subch);
+        grant->setTotalGrantedBlocks(10);
 
         grant->setPeriod(period);
         grant->setExpiration(expCounter);
@@ -450,6 +649,14 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
         uinfo->setFrameType(GRANTPKT);
         grant->setControlInfo(uinfo);
 
+        grant->setGrantedBlocks(rbmap);
+        grant->setTotalGrantedBlocks(10);
+        grant->setCsr(currentCsr);
+        if (dataPktReceived)
+        {
+            unsigned int grantedCwBytes = schedulingGrant_->getGrantedCwBytes(0);
+            grant->setGrantedCwBytes(0, grantedCwBytes);
+        }
         if (schedulingGrant_!=NULL)
         {
             schedulingGrant_ = NULL;
@@ -578,6 +785,7 @@ void LteMacVueV2X::macHandleRac(cPacket* pkt)
     delete racPkt;
 }
 
+/*
 void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
 {
     FlowControlInfo* lteInfo = check_and_cast<FlowControlInfo*>(pkt->getControlInfo());
@@ -591,6 +799,7 @@ void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
         if (schedulingGrant_ && csrReceived)
         {
             schedulingGrant_->setGrantedCwBytes(0, pktSize);
+            dataPktReceived = true;
         }
     }
 
@@ -614,10 +823,215 @@ void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
         delete pkt;
     }
 }
-
+*/
 
 void LteMacVueV2X::handleSelfMessage()
 {
+    EV << "----- UE MAIN LOOP -----" << endl;
+
+    // extract pdus from all harqrxbuffers and pass them to unmaker
+    HarqRxBuffers::iterator hit = harqRxBuffers_.begin();
+    HarqRxBuffers::iterator het = harqRxBuffers_.end();
+    LteMacPdu *pdu = NULL;
+    std::list<LteMacPdu*> pduList;
+
+    for (; hit != het; ++hit)
+    {
+        pduList=hit->second->extractCorrectPdus();
+        while (! pduList.empty())
+        {
+            pdu=pduList.front();
+            pduList.pop_front();
+            macPduUnmake(pdu);
+        }
+    }
+
+    // For each D2D communication, the status of the HARQRxBuffer must be known to the eNB
+    // For each HARQ-RX Buffer corresponding to a D2D communication, store "mirror" buffer at the eNB
+    HarqRxBuffers::iterator buffIt = harqRxBuffers_.begin();
+    for (; buffIt != harqRxBuffers_.end(); ++buffIt)
+    {
+        MacNodeId senderId = buffIt->first;
+        LteHarqBufferRx* buff = buffIt->second;
+
+        // skip the H-ARQ buffer corresponding to DL transmissions
+        if (senderId == cellId_)
+            continue;
+
+        // skip the H-ARQ buffers corresponding to D2D_MULTI transmissions
+        if (buff->isMulticast())
+            continue;
+
+        //The constructor "extracts" all the useful information from the harqRxBuffer and put them in a LteHarqBufferRxD2DMirror object
+        //That object resides in enB. Because this operation is done after the enb main loop the enb is 1 TTI backward respect to the Receiver
+        //This means that enb will check the buffer for retransmission 3 TTI before
+        LteHarqBufferRxD2DMirror* mirbuff = new LteHarqBufferRxD2DMirror(buff, (unsigned char)this->par("maxHarqRtx"), senderId);
+        enb_->storeRxHarqBufferMirror(nodeId_, mirbuff);
+    }
+
+    EV << NOW << "LteMacUeRealisticD2D::handleSelfMessage " << nodeId_ << " - HARQ process " << (unsigned int)currentHarq_ << endl;
+    // updating current HARQ process for next TTI
+
+    //unsigned char currentHarq = currentHarq_;
+
+    // no grant available - if user has backlogged data, it will trigger scheduling request
+    // no harq counter is updated since no transmission is sent.
+
+
+    // INITIALIZATION STAGE?
+    if (schedulingGrant_==NULL)
+    {
+        EV << NOW << " LteMacUeRealisticD2D::handleSelfMessage " << nodeId_ << " NO configured grant" << endl;
+
+        sendCsrRequest();   // Will this all complete before the next self message is called.
+                            // That is partially configure grant, csrRequest to Phy, Phy chooses CSR
+                            // and sends back to MAC, MAC attaches CSR to grant.
+
+    } else if (csrReceived) // We only want to start the expCounter when we first send our grant at time indicated by the CSR.
+    {
+        if (schedulingGrant_->getPeriodic())
+        {
+            if (periodCounter_ > 0)
+            {
+                periodCounter_ -= 1;
+            } else // equal to zero
+            {
+                LteSchedulingGrantMode4* grant = check_and_cast<LteSchedulingGrantMode4*>(schedulingGrant_);
+                createIntermediateGrant(schedulingGrant_->getExpiration(), schedulingGrant_->getPeriod(), grant->getCsr(), grant->getGrantedBlocks());
+                // Creates a new grant with control info because control info is removed in PHY layer.
+                sendLowerPackets(schedulingGrant_);
+                if (--expirationCounter_ == 0)
+                {
+                    int p = rand() % 5 + 1;
+                    if (p == 1) {
+                        expirationCounter_ = rand() % 11 + 5;
+                    } else {
+                        // Periodic grant is expired
+                        csrReceived = false;
+                        sendCsrRequest();
+                    }
+                }
+                else    // expiration counter is NOT equal to 0
+                {
+                    // resetting grant period
+                    periodCounter_=schedulingGrant_->getPeriod();
+                }
+            }
+        }
+    }
+
+
+    bool requestSdu = false;
+    // TODO Should this not be done every TTI, seems wasteful
+    // if a grant is configured. A grant can be partially configured
+    //if (schedulingGrant_!=NULL and csrReceived)
+    if (schedulingGrant_!=NULL)
+    {                                           // But only when a CSR is received is it fully configured.
+        if(!firstTx)
+        {
+            EV << "\t currentHarq_ counter initialized " << endl;
+            firstTx=true;
+            // the eNb will receive the first pdu in 2 TTI, thus initializing acid to 0
+//            currentHarq_ = harqRxBuffers_.begin()->second->getProcesses() - 2;
+            currentHarq_ = UE_TX_HARQ_PROCESSES - 2;
+        }
+
+        EV << "\t " << "schedulingGrant_" << endl;
+
+        EV << NOW << " LteMacUeRealisticD2D::handleSelfMessage " << nodeId_ << " entered scheduling" << endl;
+
+        bool retx = false;
+
+        HarqTxBuffers::iterator it2;
+        LteHarqBufferTx * currHarq;
+        for(it2 = harqTxBuffers_.begin(); it2 != harqTxBuffers_.end(); it2++)
+        {
+            EV << "\t Looking for retx in acid " << (unsigned int)currentHarq_ << endl;
+            currHarq = it2->second;
+
+            // check if the current process has unit ready for retx
+            bool ready = currHarq->getProcess(currentHarq_)->hasReadyUnits();
+            CwList cwListRetx = currHarq->getProcess(currentHarq_)->readyUnitsIds();
+
+            EV << "\t [process=" << (unsigned int)currentHarq_ << "] , [retx=" << ((retx)?"true":"false")
+               << "] , [n=" << cwListRetx.size() << "]" << endl;
+
+            // if a retransmission is needed
+            if(ready)
+            {
+                UnitList signal;
+                signal.first=currentHarq_;
+                signal.second = cwListRetx;
+                currHarq->markSelected(signal,schedulingGrant_->getUserTxParams()->getLayers().size());
+                retx = true;
+            }
+        }
+        // if no retx is needed, proceed with normal scheduling
+        if(!retx)
+        {
+            scheduleList_ = lcgScheduler_->schedule();      // Always returns an empty schedule list??
+            if (scheduleList_->empty())
+            {
+                // no connection scheduled, but we can use this grant to send a BSR to the eNB
+                macPduMake();       // Always called.
+            }
+            else
+            {
+                requestSdu = macSduRequest(); // return a bool -> Never called
+            }
+
+        }
+
+        // Message that triggers flushing of Tx H-ARQ buffers for all users
+        // This way, flushing is performed after the (possible) reception of new MAC PDUs
+        cMessage* flushHarqMsg = new cMessage("flushHarqMsg");
+        flushHarqMsg->setSchedulingPriority(1);        // after other messages
+        scheduleAt(NOW, flushHarqMsg);
+    }
+
+    //============================ DEBUG ==========================
+    HarqTxBuffers::iterator it;
+
+    EV << "\n htxbuf.size " << harqTxBuffers_.size() << endl;
+
+    int cntOuter = 0;
+    int cntInner = 0;
+    for(it = harqTxBuffers_.begin(); it != harqTxBuffers_.end(); it++)
+    {
+        LteHarqBufferTx* currHarq = it->second;
+        BufferStatus harqStatus = currHarq->getBufferStatus();
+        BufferStatus::iterator jt = harqStatus.begin(), jet= harqStatus.end();
+
+        EV << "\t cicloOuter " << cntOuter << " - bufferStatus.size=" << harqStatus.size() << endl;
+        for(; jt != jet; ++jt)
+        {
+            EV << "\t\t cicloInner " << cntInner << " - jt->size=" << jt->size()
+               << " - statusCw(0/1)=" << jt->at(0).second << "/" << jt->at(1).second << endl;
+        }
+    }
+    //======================== END DEBUG ==========================
+
+    unsigned int purged =0;
+    // purge from corrupted PDUs all Rx H-HARQ buffers
+    for (hit= harqRxBuffers_.begin(); hit != het; ++hit)
+    {
+        // purge corrupted PDUs only if this buffer is for a DL transmission. Otherwise, if you
+        // purge PDUs for D2D communication, also "mirror" buffers will be purged
+        if (hit->first == cellId_)
+            purged += hit->second->purgeCorruptedPdus();
+    }
+    EV << NOW << " LteMacUeRealisticD2D::handleSelfMessage Purged " << purged << " PDUS" << endl;
+
+    if (requestSdu == false)
+    {
+        // update current harq process id
+        currentHarq_ = (currentHarq_+1) % harqProcesses_;
+    }
+
+    EV << "--- END UE MAIN LOOP ---" << endl;
+
+
+    /*
     EV << "----- UE MAIN LOOP -----" << endl;
 
     // extract pdus from all harqrxbuffers and pass them to unmaker
@@ -715,7 +1129,8 @@ void LteMacVueV2X::handleSelfMessage()
     bool requestSdu = false;
     // TODO Should this not be done every TTI, seems wasteful
     // if a grant is configured. A grant can be partially configured
-    if (schedulingGrant_!=NULL and csrReceived)
+    //if (schedulingGrant_!=NULL and csrReceived)
+    if (schedulingGrant_!=NULL)
     {                                           // But only when a CSR is received is it fully configured.
         if(!firstTx)
         {
@@ -819,6 +1234,7 @@ void LteMacVueV2X::handleSelfMessage()
     }
 
     EV << "--- END UE MAIN LOOP ---" << endl;
+    */
 }
 
 

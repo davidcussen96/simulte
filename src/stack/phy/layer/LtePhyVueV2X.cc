@@ -440,6 +440,10 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         lteInfo->setGrantedBlocks(rbmap);
         lteInfo->setTxPower(txPower_);
         lteInfo->setD2dTxPower(d2dTxPower_);
+        lteInfo->setIsBroadcast(true);
+        //lteInfo->setSourceId(getMacNodeId());
+        //lteInfo->setDestId(getMacCellId());       //?? Is this the destination ??
+        lteInfo->setDirection(D2D);
         sciFrame->setControlInfo(lteInfo);
         
         sendBroadcast(sciFrame);
@@ -451,6 +455,10 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         }
         dataFrame = new LteAirFrame("empty frame");
 
+    } else if (lteInfo->getFrameType() == CSRREQUEST)
+    {
+        CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
+        chooseCsr(csrRequest->getPrioTx(), csrRequest->getPRsvpTx(), csrRequest->getCResel());
     } else if (lteInfo->getFrameType() == DATAPKT)
     {
         // Message received is a data packet. Store it and send it + SCI when the next grant is received.
@@ -463,17 +471,17 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         lteInfoData->setCoord(getRadioPosition());
         lteInfoData->setTxPower(txPower_);
         lteInfoData->setD2dTxPower(d2dTxPower_);
+        //lteInfoData->setSourceId(getMacNodeId());
+        //lteInfoData->setDestId(getMacCellId());       //?? Is this the destination ??
+        lteInfoData->setDirection(D2D);
         // initialize frame fields
         dataFrame->setName("data frame");
         dataFrame->setSchedulingPriority(airFramePriority_);
         dataFrame->setDuration(TTI);
         // set current position
-
-
-    } else if (lteInfo->getFrameType() == CSRREQUEST)
+    } else
     {
-        CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
-        chooseCsr(csrRequest->getPrioTx(), csrRequest->getPRsvpTx(), csrRequest->getCResel());
+        unsigned int x = 4;
     }
 }
 
