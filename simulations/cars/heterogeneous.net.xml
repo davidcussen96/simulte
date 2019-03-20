@@ -2,32 +2,25 @@
 
 <!-- generated on Mon Oct 20 13:12:08 2014 by SUMO netgenerate Version 0.20.0
 <?xml version="1.0" encoding="UTF-8"?>
-
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo-sim.org/xsd/netgenerateConfiguration.xsd">
-
     <grid_network>
         <grid value="true"/>
         <grid.number value="3"/>
         <grid.length value="200"/>
     </grid_network>
-
     <output>
         <output-file value="singleIntersection.net.xml"/>
     </output>
-
     <tls_building>
         <tls.unset value="1/1"/>
     </tls_building>
-
     <processing>
         <no-turnarounds value="true"/>
     </processing>
-
     <building_defaults>
         <default.lanenumber value="1"/>
         <default-junction-type value="traffic_light_unregulated"/>
     </building_defaults>
-
 </configuration>
 -->
 

@@ -12,13 +12,15 @@
 
 #include "stack/phy/layer/LtePhyVueV2X.h"
 #include "stack/subchannel/Subchannel.h"
+#include "stack/phy/layer/LtePhyBase.h"
+#include "common/LteCommon.h"
 
 class LtePhyVueV2X : public LtePhyUeD2D
 {
   protected:
 
     // Number of subchannels per subframe -> 4 subchannels per subframe with 12 RBs per subchannel.
-    int numSubchannels = 4;
+    int numSubchannels = 5;
     // D2D Tx Power
     double d2dTxPower_;
     std::vector<std::vector<Subchannel*>> sensingWindow;
@@ -38,7 +40,8 @@ class LtePhyVueV2X : public LtePhyUeD2D
     std::map<uint16_t, unsigned int> mcsMap;
     
     bool notSensedFlag = false;
-
+    //ParameterMap& params;
+    //LteRealisticChannelModel* channelModel_ = check_and_cast<LteRealisticChannelModel*>(initializeChannelModel(params));
     LteRealisticChannelModel* channelModel_;
 
     void storeAirFrame(LteAirFrame* newFrame);

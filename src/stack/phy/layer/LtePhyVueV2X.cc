@@ -18,6 +18,7 @@
 #include "stack/mac/packet/CsrRequest_m.h"
 #include "stack/phy/packet/CsrMessage.h"
 #include "stack/phy/packet/LteAirFrame.h"
+#include <ctime>
 
 Define_Module(LtePhyVueV2X);
 
@@ -55,6 +56,7 @@ void LtePhyVueV2X::initialize(int stage)
         v2xDecodingTimer_ = NULL;
         updateSensingWindow_ = NULL;
         updatePointers();
+        srand(time(NULL));
     }
 
 }
@@ -131,7 +133,7 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
         sciList.clear();
         tbList.clear();
         
-        int counter = 0, subchannelIndex;
+        //int counter = 0, subchannelIndex;
         for (int k = 0; k < subchannelList.size(); k++)
         {
             int subch = subchannelList[k]->getSubchannel();
@@ -148,7 +150,7 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
 void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
 {
     int pRsvpTxPrime = 0, prioRx = 0, k = 1, lSubch = 1, pRsvpRx, pStep = 100, thresAddition = 0,
-    numSubch = numSubchannels, numCsrs, subchIndex, numNotSensed = 0, q = 1, msAgo = 1000, thIndex, riv, Th;
+    numSubch = numSubchannels, numCsrs, subchIndex, q = 1, msAgo = 1000, thIndex, riv, Th;
     bool wrapped;   // notSensedChecked = false,
     pRsvpTxPrime = pStep * pRsvpTx / 100;
 
@@ -304,7 +306,7 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
     bool b;
     if (rssiValues.size() > 0) b = true;
     else b = false;     // There are no CSRs in rssiValues.
-    while (size < 80 && b)
+    while (size < 100 && b)
     {
         if (rssiValues.size() == 0) break;  // There are no CSRs in rssiValues.
         currentRssi = rssiValues.back();
@@ -436,20 +438,24 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         // set current position
         lteInfo->setCoord(getRadioPosition());
         int s = grant->getCsr()->getSubchannel();
-        RbMap rbmap = getRbMap(s, true);
+        RbMap rbmap = getRbMap(s-1, true);
         lteInfo->setGrantedBlocks(rbmap);
         lteInfo->setTxPower(txPower_);
         lteInfo->setD2dTxPower(d2dTxPower_);
         lteInfo->setIsBroadcast(true);
+        lteInfo->setTxNumber(1);
+        lteInfo->setUserTxParams(grant->getUserTxParams()->dup());
         //lteInfo->setSourceId(getMacNodeId());
         //lteInfo->setDestId(getMacCellId());       //?? Is this the destination ??
-        lteInfo->setDirection(D2D);
+        lteInfo->setDirection(D2D_MULTI);
+        lteInfo->setFrameType(UNKNOWN_TYPE);
         sciFrame->setControlInfo(lteInfo);
         
         sendBroadcast(sciFrame);
         if (strcmp(dataFrame->getName(), "empty frame") != 0)
         {
-            lteInfoData->setGrantedBlocks(getRbMap(grant->getCsr()->getSubchannel(), false));
+            lteInfoData->setGrantedBlocks(getRbMap(grant->getCsr()->getSubchannel()-1, false));
+            lteInfoData->setUserTxParams(grant->getUserTxParams()->dup());
             dataFrame->setControlInfo(lteInfoData);
             sendBroadcast(dataFrame);
         }
@@ -459,7 +465,7 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
     {
         CsrRequest* csrRequest = check_and_cast<CsrRequest*>(msg);
         chooseCsr(csrRequest->getPrioTx(), csrRequest->getPRsvpTx(), csrRequest->getCResel());
-    } else if (lteInfo->getFrameType() == DATAPKT)
+    } else if (lteInfo->getFrameType() == DATAPKT and strcmp(dataFrame->getName(), "empty frame") == 0)
     {
         // Message received is a data packet. Store it and send it + SCI when the next grant is received.
         // If there was no data packet received when a grant is received you still send an SCI.
@@ -472,16 +478,16 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         lteInfoData->setTxPower(txPower_);
         lteInfoData->setD2dTxPower(d2dTxPower_);
         //lteInfoData->setSourceId(getMacNodeId());
+        lteInfoData->setIsBroadcast(true);
         //lteInfoData->setDestId(getMacCellId());       //?? Is this the destination ??
-        lteInfoData->setDirection(D2D);
+        lteInfoData->setDirection(D2D_MULTI);
+        lteInfoData->setTxNumber(1);
+        lteInfoData->setFrameType(UNKNOWN_TYPE);
         // initialize frame fields
         dataFrame->setName("data frame");
         dataFrame->setSchedulingPriority(airFramePriority_);
         dataFrame->setDuration(TTI);
         // set current position
-    } else
-    {
-        unsigned int x = 4;
     }
 }
 
@@ -493,53 +499,57 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
     Coord myCoord = getCoord();
     std::vector<double> rsrpVector;
     std::vector<double> rssiVector;
-    //MacNodeId enbId = binder_->getNextHop(newInfo->getSourceId());   // eNodeB id??
-    MacNodeId enbId = 1;
+    MacNodeId enbId = binder_->getNextHop(newInfo->getSourceId());   // eNodeB id??
+    //MacNodeId enbId = 1;
 
-    rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
-    rssiVector = channelModel_->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord, enbId);
-    int rsrp = 0;
-    int rssi = 0;
-
-    int subchannelIndex = -1;   // Not assigned
-
-    // get the average RSRP on the RBs allocated for the transmission
-    RbMap rbmap = newInfo->getGrantedBlocks();
-    RbMap::iterator it;
-    std::map<Band, unsigned int>::iterator jt;
-    //for each Remote unit used to transmit the packet
-    for (it = rbmap.begin(); it != rbmap.end(); ++it)
+    if (strcmp(par("d2dMulticastCaptureEffectFactor"), "RSRP") == 0)
     {
-        //for each logical band used to transmit the packet
-        for (jt = it->second.begin(); jt != it->second.end(); ++jt)
+        rssiVector = channelModel_->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord, enbId);
+        rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+        int rsrp = 0;
+        int rssi = 0;
+
+        int subchannelIndex = -1;   // Not assigned
+
+        // get the average RSRP on the RBs allocated for the transmission
+        RbMap rbmap = newInfo->getGrantedBlocks();
+        RbMap::iterator it;
+        std::map<Band, unsigned int>::iterator jt;
+        //for each Remote unit used to transmit the packet
+        for (it = rbmap.begin(); it != rbmap.end(); ++it)
         {
-            Band band = jt->first;
-            if (jt->second == 0) // this Rb is not allocated
-                continue;
-
-            // TODO Will need to calculate this.
-            if (subchannelIndex == -1)
+            //for each logical band used to transmit the packet
+            for (jt = it->second.begin(); jt != it->second.end(); ++jt)
             {
-                if (jt->second == 1 or jt->second == 3) subchannelIndex = 0;
-                else if (jt->second == 11 or jt->second == 13) subchannelIndex = 1;
-                else if (jt->second == 21 or jt->second == 23) subchannelIndex = 2;
-                else if (jt->second == 31 or jt->second == 33) subchannelIndex = 3;
-            }
+                Band band = jt->first;
+                if (jt->second == 0) // this Rb is not allocated
+                    continue;
 
-            rsrp += rsrpVector.at(band);
-            rssi += rssiVector.at(band);
+                // TODO Will need to calculate this.
+                if (subchannelIndex == -1)
+                {
+                    if (band == 1 or band == 3) subchannelIndex = 0;
+                    else if (band == 11 or band == 13) subchannelIndex = 1;
+                    else if (band == 21 or band == 23) subchannelIndex = 2;
+                    else if (band == 31 or band == 33) subchannelIndex = 3;
+                    else if (band == 41 or band == 43) subchannelIndex = 4;
+                }
+
+                rsrp += rsrpVector.at(band);
+                rssi += rssiVector.at(band);
+            }
         }
+        Sci* sci = check_and_cast<Sci*>(newFrame);
+        if (sci != nullptr) {
+            Subchannel* subchannel = new Subchannel(sci, rsrp, rssi, sourceId, subchannelIndex);
+            sciList.push_back(subchannel);
+        } else {
+            Subchannel* subchannel = new Subchannel(rsrp, rssi, sourceId, subchannelIndex);
+            tbList.push_back(subchannel);
+        }
+        v2xReceivedFrames_.push_back(newFrame);
     }
     
-    Sci* sci = check_and_cast<Sci*>(newFrame);
-    if (sci != nullptr) {
-        Subchannel* subchannel = new Subchannel(sci, rsrp, rssi, sourceId, subchannelIndex);
-        sciList.push_back(subchannel);
-    } else {
-        Subchannel* subchannel = new Subchannel(rsrp, rssi, sourceId, subchannelIndex);
-        tbList.push_back(subchannel);
-    }
-    v2xReceivedFrames_.push_back(newFrame);
     delete newFrame;
 }
 

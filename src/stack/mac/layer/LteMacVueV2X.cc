@@ -506,29 +506,18 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
             //expirationCounter_ = currentCsr->getSubframe() + schedulingGrant_->getResourceReservation()
               //      + schedulingGrant_->getPeriod();     // simtime() + (RRI x RC)
             return;
-        } /*else if (userInfo->getFrameType() == D2DMODESWITCHPKT)
-        {
-            EV << "LteMacUeRealisticD2D::handleMessage - Received packet " << pkt->getName() <<
-            " from port " << pkt->getArrivalGate()->getName() << endl;
-
-            // message from PHY_to_MAC gate (from lower layer)
-            emit(receivedPacketFromLowerLayer, pkt);
-
-            // call handler
-            macHandleD2DModeSwitch(pkt);
-
-            return;
-        }*/
+        }
     }
 
-    LteMacUeRealistic::handleMessage(msg);
+    //LteMacUeRealistic::handleMessage(msg);
+    LteMacUeRealisticD2D::handleMessage(msg);
 }
 
 RbMap LteMacVueV2X::getFullRbMap(unsigned int subch)
 {
     RbMap grantedBlocks;
     std::map<Band, unsigned int> temp;
-    for (unsigned short i = 1; i < 3; i++)
+    for (unsigned short i = 1; i < 11; i++)
     {
         Band band = i+10*subch;
         temp[band] = 1;
@@ -574,19 +563,15 @@ void LteMacVueV2X::macHandleGrant()
 
     // delete old grant
     LteSchedulingGrantMode4 *grant = new LteSchedulingGrantMode4();
-    Direction dir = (Direction)D2D;
+    Direction dir = (Direction)D2D_MULTI;
     grant->setDirection(dir);
     grant->setPeriod(100);
     grant->setPriority(1);
     grant->setResourceReservation(100);
     grant->setCodewords(1);
-    grant->setTotalGrantedBlocks(10);
+    grant->setTotalGrantedBlocks(1);
 
-    if (dataPktReceived)
-    {
-        unsigned int grantedCwBytes = schedulingGrant_->getGrantedCwBytes(0);
-        grant->setGrantedCwBytes(0, grantedCwBytes);
-    }
+    grant->setUserTxParams(preconfiguredTxParams_->dup());
 
     int exp = rand() % 11 + 5;;
     grant->setExpiration(exp);
@@ -597,7 +582,7 @@ void LteMacVueV2X::macHandleGrant()
     UserControlInfo* uinfo = new UserControlInfo();
     uinfo->setSourceId(getMacNodeId());
     uinfo->setDestId(getMacCellId());       //?? Is this the destination ??
-    uinfo->setDirection(D2D);
+    uinfo->setDirection(D2D_MULTI);
     uinfo->setFrameType(GRANTPKT);
     grant->setControlInfo(uinfo);
 
@@ -627,14 +612,14 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
 {
     // delete old grant
         LteSchedulingGrantMode4 *grant = new LteSchedulingGrantMode4();
-        Direction dir = (Direction)D2D;
+        Direction dir = (Direction)D2D_MULTI;
         grant->setDirection(dir);
         grant->setPeriod(100);
         grant->setPriority(1);
         grant->setResourceReservation(100);
         grant->setCodewords(1);
         grant->setCsr(subch);
-        grant->setTotalGrantedBlocks(10);
+        grant->setTotalGrantedBlocks(1);
 
         grant->setPeriod(period);
         grant->setExpiration(expCounter);
@@ -642,10 +627,12 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
         // Set periodic to true so that periodCounter and expirationCounter get set.
         grant->setPeriodic(true);
 
+        grant->setUserTxParams(preconfiguredTxParams_->dup());
+
         UserControlInfo* uinfo = new UserControlInfo();
         uinfo->setSourceId(getMacNodeId());
         uinfo->setDestId(getMacCellId());
-        uinfo->setDirection(D2D);
+        uinfo->setDirection(D2D_MULTI);
         uinfo->setFrameType(GRANTPKT);
         grant->setControlInfo(uinfo);
 
@@ -656,7 +643,10 @@ void LteMacVueV2X::createIntermediateGrant(unsigned int expCounter, unsigned int
         {
             unsigned int grantedCwBytes = schedulingGrant_->getGrantedCwBytes(0);
             grant->setGrantedCwBytes(0, grantedCwBytes);
+            //dataPktReceived = false;
         }
+
+
         if (schedulingGrant_!=NULL)
         {
             schedulingGrant_ = NULL;
@@ -785,7 +775,7 @@ void LteMacVueV2X::macHandleRac(cPacket* pkt)
     delete racPkt;
 }
 
-/*
+
 void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
 {
     FlowControlInfo* lteInfo = check_and_cast<FlowControlInfo*>(pkt->getControlInfo());
@@ -794,13 +784,16 @@ void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
     // Before we bufferize packet we need to determine size of packet and then set scheduling grants message size.
     if (strcmp(pkt->getName(), "newDataPkt") == 0)
     {
-        int64_t pktSize = pkt->getByteLength();
+        pktSize = pkt->getByteLength();
         // Now we need to set the scheduling grant. What method is used ?? setGrantedCwBytes() ??
-        if (schedulingGrant_ && csrReceived)
-        {
-            schedulingGrant_->setGrantedCwBytes(0, pktSize);
-            dataPktReceived = true;
-        }
+        dataPktReceived = true;
+    }
+
+    if (schedulingGrant_ != NULL and dataPktReceived)
+    {
+        schedulingGrant_->setGrantedCwBytes(0, pktSize);
+        dataPktReceived = false;
+        pktSize = 0;
     }
 
     // bufferize packet
@@ -823,7 +816,7 @@ void LteMacVueV2X::handleUpperMessage(cPacket* pkt)
         delete pkt;
     }
 }
-*/
+
 
 void LteMacVueV2X::handleSelfMessage()
 {
@@ -970,16 +963,12 @@ void LteMacVueV2X::handleSelfMessage()
         if(!retx)
         {
             scheduleList_ = lcgScheduler_->schedule();      // Always returns an empty schedule list??
-            if (scheduleList_->empty())
+            bool requestSdu = macSduRequest(); // return a bool -> Never called
+            if (requestSdu and scheduleList_->empty())
             {
                 // no connection scheduled, but we can use this grant to send a BSR to the eNB
                 macPduMake();       // Always called.
             }
-            else
-            {
-                requestSdu = macSduRequest(); // return a bool -> Never called
-            }
-
         }
 
         // Message that triggers flushing of Tx H-ARQ buffers for all users

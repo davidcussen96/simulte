@@ -35,6 +35,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
     Subchannel* currentCsr;
     bool csrReceived = false;
     bool dataPktReceived = false;
+    int64_t pktSize;
 
   protected:
 
@@ -73,7 +74,7 @@ class LteMacVueV2X : public LteMacUeRealisticD2D
 
     virtual LteMacPdu* makeBsr(int size);
 
-    //virtual void handleUpperMessage(cPacket* pkt);
+    virtual void handleUpperMessage(cPacket* pkt);
 
     /**
      * macPduMake() creates MAC PDUs (one for each CID)
