@@ -42,7 +42,7 @@ class LtePhyVueV2X : public LtePhyUeD2D
     bool notSensedFlag = false;
     //ParameterMap& params;
     //LteRealisticChannelModel* channelModel_ = check_and_cast<LteRealisticChannelModel*>(initializeChannelModel(params));
-    LteRealisticChannelModel* channelModel_;
+    //LteRealisticChannelModel* channelModel_;
 
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();

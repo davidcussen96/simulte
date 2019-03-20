@@ -502,10 +502,11 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
     MacNodeId enbId = binder_->getNextHop(newInfo->getSourceId());   // eNodeB id??
     //MacNodeId enbId = 1;
 
-    if (strcmp(par("d2dMulticastCaptureEffectFactor"), "RSRP") == 0)
+    if (strcmp(par("d2dMulticastCaptureEffectFactor"), "RSRP") == 0
+            && (strcmp(newFrame->getName(), "data frame") == 0 || strcmp(newFrame->getName(), "SCI") == 0))
     {
-        rssiVector = channelModel_->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord, enbId);
-        rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+        rssiVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord, enbId);
+        rsrpVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
         int rsrp = 0;
         int rssi = 0;
 
@@ -539,13 +540,15 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
                 rssi += rssiVector.at(band);
             }
         }
-        Sci* sci = check_and_cast<Sci*>(newFrame);
-        if (sci != nullptr) {
-            Subchannel* subchannel = new Subchannel(sci, rsrp, rssi, sourceId, subchannelIndex);
-            sciList.push_back(subchannel);
-        } else {
+        cPacket* pkt = newFrame->getEncapsulatedPacket();
+        if (dynamic_cast<Sci*>(pkt) == nullptr) {
+
             Subchannel* subchannel = new Subchannel(rsrp, rssi, sourceId, subchannelIndex);
             tbList.push_back(subchannel);
+        } else {
+            Sci* sci = check_and_cast<Sci*>(pkt);
+            Subchannel* subchannel = new Subchannel(sci, rsrp, rssi, sourceId, subchannelIndex);
+            sciList.push_back(subchannel);
         }
         v2xReceivedFrames_.push_back(newFrame);
     }
@@ -597,12 +600,12 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
                 frame->addRemoteUnitPhyDataVector(data);
             }
             // apply analog models For DAS
-            result=channelModel_->errorDas(frame,lteInfo);
+            result=check_and_cast<LteRealisticChannelModel*>(channelModel_)->errorDas(frame,lteInfo);
         }
         else
         {
             unsigned int mcs = 0;
-            result = channelModel_->error(frame,lteInfo, mcs);
+            result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error(frame,lteInfo, mcs);
         }
 
         // update statistics
@@ -640,11 +643,11 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
                 frame->addRemoteUnitPhyDataVector(data);
             }
             // apply analog models For DAS
-            result=channelModel_->errorDas(frame,lteInfo);
+            result=check_and_cast<LteRealisticChannelModel*>(channelModel_)->errorDas(frame,lteInfo);
         }
         else
         {
-            result = channelModel_->error(frame,lteInfo, mcs);
+            result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error(frame,lteInfo, mcs);
         }
 
         // update statistics

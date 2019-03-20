@@ -18,5 +18,6 @@ public:
     }
 
     Sci();
+    virtual Sci *dup() const override {return new Sci(*this);}
 };
 
