@@ -308,166 +308,6 @@ void LteMacVueV2X::macPduMake()
             txBuf->insertPdu(txList.first,cw, macPkt);
         }
     }
-/*
-    int64 size = 0;
-
-    macPduList_.clear();
-
-    // UE is in D2D-mode but it received an UL grant (for BSR)
-    // Mode 4 always in D2D-mode: delete-> Wont receive BSR.
-
-    // In a D2D communication if BSR was created above this part isn't executed
-    // Build a MAC PDU for each scheduled user on each codeword -> Build one MAC PDU for broadcast
-
-    //LteMacScheduleList::const_iterator it;
-    LteMacPdu* macPkt;
-    cPacket* pkt;
-
-    MacCid destCid = 1025;//it->first.first;   // IS THERE A BROADCAST destCid
-    Codeword cw = 0;//it->first.second;     // ALWAYS 0
-
-    // get the direction (UL/D2D/D2D_MULTI) and the corresponding destination ID
-    //FlowControlInfo* lteInfo = &(connDesc_.at(destCid));
-    MacNodeId destId = 1025; //lteInfo->getDestId();    // MULTI GROUP ID??
-    Direction dir = D2D;//(Direction)lteInfo->getDirection();     // ALWAYS D2D
-
-    std::pair<MacNodeId, Codeword> pktId = std::pair<MacNodeId, Codeword>(destId, cw);
-    unsigned int sduPerCid = 1;//it->second;
-
-    //MacPduList::iterator pit = macPduList_.find(pktId);
-
-    // ??
-    if (sduPerCid == 0 && !bsrTriggered_ && !bsrD2DMulticastTriggered_)
-    {
-        continue;
-    }
-
-    // No packets for this user on this codeword
-    // Only one codeword, 0 or 1??
-
-    // Always goes here because of the macPduList_.clear() at the beginning
-    // Build the Control Element of the MAC PDU
-    UserControlInfo* uinfo = new UserControlInfo();
-    uinfo->setSourceId(getMacNodeId());
-    uinfo->setDestId(destId);
-    uinfo->setLcid(MacCidToLcid(destCid));
-    uinfo->setDirection(dir);
-    uinfo->setLcid(MacCidToLcid(SHORT_BSR));
-    if (usePreconfiguredTxParams_)
-        uinfo->setUserTxParams(preconfiguredTxParams_->dup());
-    else
-        uinfo->setUserTxParams(schedulingGrant_->getUserTxParams()->dup());
-    // Create a PDU
-    macPkt = new LteMacPdu("LteMacPdu");
-    macPkt->setHeaderLength(MAC_HEADER);
-    macPkt->setControlInfo(uinfo);
-    macPkt->setTimestamp(NOW);
-    macPduList_[pktId] = macPkt;
-
-
-    while (sduPerCid > 0)
-    {
-        // Add SDU to PDU
-        // Find Mac Pkt
-        //if (mbuf_.find(destCid) == mbuf_.end())
-          //  throw cRuntimeError("Unable to find mac buffer for cid %d", destCid);
-
-        //if (mbuf_[destCid]->empty())
-          //  throw cRuntimeError("Empty buffer for cid %d, while expected SDUs were %d", destCid, sduPerCid);
-
-        pkt = mbuf_[destCid]->popFront();
-
-        // multicast support
-        // this trick gets the group ID from the MAC SDU and sets it in the MAC PDU
-        int32 groupId = check_and_cast<LteControlInfo*>(pkt->getControlInfo())->getMulticastGroupId();
-        if (groupId >= 0) // for unicast, group id is -1
-            check_and_cast<LteControlInfo*>(macPkt->getControlInfo())->setMulticastGroupId(groupId);
-
-        drop(pkt);
-
-        macPkt->pushSdu(pkt);
-        sduPerCid--;
-    }
-
-    // consider virtual buffers to compute BSR size
-    size += macBuffers_[destCid]->getQueueOccupancy();
-
-    if (size > 0)
-    {
-        // take into account the RLC header size
-        if (connDesc_[destCid].getRlcType() == UM)
-            size += RLC_HEADER_UM;
-        else if (connDesc_[destCid].getRlcType() == AM)
-            size += RLC_HEADER_AM;
-    }
-
-    // Just want to put one in?
-    // Put MAC PDUs in H-ARQ buffers
-    MacPduList::iterator pit;
-    for (pit = macPduList_.begin(); pit != macPduList_.end(); pit++)
-    {
-        MacNodeId destId = pit->first.first;
-        Codeword cw = pit->first.second;
-        // Check if the HarqTx buffer already exists for the destId
-        // Get a reference for the destId TXBuffer
-        LteHarqBufferTx* txBuf;
-        HarqTxBuffers::iterator hit = harqTxBuffers_.find(destId);
-        if ( hit != harqTxBuffers_.end() )
-        {
-            // The tx buffer already exists
-            txBuf = hit->second;
-        }
-        else
-        {
-            // The tx buffer does not exist yet for this mac node id, create one
-            LteHarqBufferTx* hb;
-            // FIXME: hb is never deleted
-            UserControlInfo* info = check_and_cast<UserControlInfo*>(pit->second->getControlInfo());
-            if (info->getDirection() == UL)
-                hb = new LteHarqBufferTx((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) getMacByMacNodeId(destId));
-            else // D2D or D2D_MULTI
-                hb = new LteHarqBufferTxD2D((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) getMacByMacNodeId(destId));
-            harqTxBuffers_[destId] = hb;
-            txBuf = hb;
-        }
-
-        // search for an empty unit within current harq process
-        UnitList txList = txBuf->getEmptyUnits(currentHarq_);
-        EV << "LteMacUeRealisticD2D::macPduMake - [Used Acid=" << (unsigned int)txList.first << "] , [curr=" << (unsigned int)currentHarq_ << "]" << endl;
-
-        //Get a reference of the LteMacPdu from pit pointer (extract Pdu from the MAP)
-        //LteMacPdu* macPkt = pit->second;
-
-        // Attach BSR to PDU if RAC is won and wasn't already made
-
-        if ((bsrTriggered_ || bsrD2DMulticastTriggered_) && !bsrAlreadyMade )
-        {
-            MacBsr* bsr = new MacBsr();
-            bsr->setTimestamp(simTime().dbl());
-            bsr->setSize(size);
-            macPkt->pushCe(bsr);
-            bsrTriggered_ = false;
-            bsrD2DMulticastTriggered_ = false;
-            EV << "LteMacUeRealisticD2D::macPduMake - BSR created with size " << size << endl;
-        }
-
-        EV << "LteMacUeRealisticD2D: pduMaker created PDU: " << macPkt->info() << endl;
-
-        // TODO: harq test
-        // pdu transmission here (if any)
-        // txAcid has HARQ_NONE for non-fillable codeword, acid otherwise
-        if (txList.second.empty())
-        {
-            EV << "LteMacUeRealisticD2D() : no available process for this MAC pdu in TxHarqBuffer" << endl;
-            delete macPkt;
-        }
-        else
-        {
-            //Insert PDU in the Harq Tx Buffer
-            //txList.first is the acid
-            txBuf->insertPdu(txList.first,cw, macPkt);
-        }
-    }*/
 }
 
 void LteMacVueV2X::handleMessage(cMessage* msg)
@@ -488,9 +328,10 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
         EV << "LteMacVueV2X::handleMessage - Received packet " << pkt->getName() <<
                     " from port " << pkt->getArrivalGate()->getName() << endl;
 
-        CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
-        if (csrMsg)
+
+        if (dynamic_cast<CsrMessage*>(pkt) != nullptr)
         {
+            CsrMessage* csrMsg = check_and_cast<CsrMessage*>(pkt);
             currentCsr = chooseCsrAtRandom(csrMsg->getCsrList());
 
             // currentCsr has a subframe and subchannel variable to determine when in the selection window it occurred and
@@ -503,13 +344,11 @@ void LteMacVueV2X::handleMessage(cMessage* msg)
             grant->setTotalGrantedBlocks(10);
             periodCounter_ = currentCsr->getSubframe();
             csrReceived = true;
-            //expirationCounter_ = currentCsr->getSubframe() + schedulingGrant_->getResourceReservation()
-              //      + schedulingGrant_->getPeriod();     // simtime() + (RRI x RC)
+
             return;
         }
     }
 
-    //LteMacUeRealistic::handleMessage(msg);
     LteMacUeRealisticD2D::handleMessage(msg);
 }
 
@@ -517,7 +356,7 @@ RbMap LteMacVueV2X::getFullRbMap(unsigned int subch)
 {
     RbMap grantedBlocks;
     std::map<Band, unsigned int> temp;
-    for (unsigned short i = 1; i < 11; i++)
+    for (unsigned short i = 0; i < 10; i++)
     {
         Band band = i+10*subch;
         temp[band] = 1;

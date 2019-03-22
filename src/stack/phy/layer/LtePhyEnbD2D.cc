@@ -228,9 +228,9 @@ void LtePhyEnbD2D::handleAirFrame(cMessage* msg)
         result = channelModel_->error(frame, lteInfo);
     }
     if (result)
-        numAirFrameWithSCIsReceived_++;
+        numAirFramesWithSCIsReceived_++;
     else
-        numAirFrameWithSCIsNotReceived_++;
+        numAirFramesWithSCIsNotReceived_++;
 
     EV << "Handled LteAirframe with ID " << frame->getId() << " with result "
        << (result ? "RECEIVED" : "NOT RECEIVED") << endl;

@@ -36,18 +36,18 @@ void LtePhyBase::initialize(int stage)
         radioInGate_ = findGate("radioIn");
 
         // Initialize and watch statistics
-        numAirFrameWithSCIsReceived_ = numAirFrameWithSCIsNotReceived_ = 0;
-        numAirFrameWithTBsReceived_ = numAirFrameWithTBsNotReceived_ = 0;
+        numAirFramesWithSCIsReceived_ = numAirFramesWithSCIsNotReceived_ = 0;
+        numAirFramesWithTBsReceived_ = numAirFramesWithTBsNotReceived_ = 0;
         ueTxPower_ = par("ueTxPower");
         eNodeBtxPower_ = par("eNodeBTxPower");
         microTxPower_ = par("microTxPower");
         relayTxPower_ = par("relayTxPower");
 
         carrierFrequency_ = 2.1e+9;
-        WATCH(numAirFrameWithSCIsReceived_);
-        WATCH(numAirFrameWithSCIsNotReceived_);
-        WATCH(numAirFrameWithTBsReceived_);
-        WATCH(numAirFrameWithTBsNotReceived_);
+        WATCH(numAirFramesWithSCIsReceived_);
+        WATCH(numAirFramesWithSCIsNotReceived_);
+        WATCH(numAirFramesWithTBsReceived_);
+        WATCH(numAirFramesWithTBsNotReceived_);
     }
     else if (stage == inet::INITSTAGE_PHYSICAL_ENVIRONMENT_2)
     {
@@ -212,15 +212,15 @@ LteChannelModel* LtePhyBase::initializeDummyChannelModel(ParameterMap& params)
 void LtePhyBase::updateDisplayString()
 {
     char buf[80] = "";
-    if (numAirFrameWithSCIsReceived_ > 0)
-        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFrameWithSCIsReceived_);
-    if (numAirFrameWithSCIsNotReceived_ > 0)
-        sprintf(buf + strlen(buf), "af_no:%d ", numAirFrameWithSCIsNotReceived_);
+    if (numAirFramesWithSCIsReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFramesWithSCIsReceived_);
+    if (numAirFramesWithSCIsNotReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_no:%d ", numAirFramesWithSCIsNotReceived_);
     getDisplayString().setTagArg("t", 0, buf);
-    if (numAirFrameWithTBsReceived_ > 0)
-        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFrameWithTBsReceived_);
-    if (numAirFrameWithTBsNotReceived_ > 0)
-        sprintf(buf + strlen(buf), "af_no:%d ", numAirFrameWithTBsNotReceived_);
+    if (numAirFramesWithTBsReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_ok:%d ", numAirFramesWithTBsReceived_);
+    if (numAirFramesWithTBsNotReceived_ > 0)
+        sprintf(buf + strlen(buf), "af_no:%d ", numAirFramesWithTBsNotReceived_);
     getDisplayString().setTagArg("t", 0, buf);
 }
 

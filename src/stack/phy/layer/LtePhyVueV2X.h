@@ -25,7 +25,8 @@ class LtePhyVueV2X : public LtePhyUeD2D
     double d2dTxPower_;
     std::vector<std::vector<Subchannel*>> sensingWindow;
     std::vector<Subchannel*> subchannelList;
-    std::vector<LteAirFrame*> v2xReceivedFrames_; // airframes received in the current TTI. Only one will be decoded
+    std::vector<LteAirFrame*> v2xReceivedFramesSCI_; // airframes received in the current TTI. Only one will be decoded
+    std::vector<LteAirFrame*> v2xReceivedFramesTB_;
     cMessage* v2xDecodingTimer_;                  // timer for triggering decoding at the end of the TTI. Started
                                                   // when the first airframe is received
     cMessage* updateSensingWindow_;
@@ -35,17 +36,27 @@ class LtePhyVueV2X : public LtePhyUeD2D
     simtime_t timeRequested;
     LteAirFrame* dataFrame = new LteAirFrame("empty frame");
     UserControlInfo* lteInfoData;
+    // Vectors containing sci's and tb's
     std::vector<Subchannel*> sciList;
     std::vector<Subchannel*> tbList;
+    // SourceId : mcs
     std::map<uint16_t, unsigned int> mcsMap;
+    // SourceId : SCI received correctly (true/false)
+    std::map<uint16_t, bool> sciReceivedCorrectly;
     
     bool notSensedFlag = false;
-    //ParameterMap& params;
-    //LteRealisticChannelModel* channelModel_ = check_and_cast<LteRealisticChannelModel*>(initializeChannelModel(params));
     //LteRealisticChannelModel* channelModel_;
+    //Statistics
+    simsignal_t numAirFramesWithSCIsReceivedSignal_;
+    simsignal_t numAirFramesWithSCIsNotReceivedSignal_;
+    simsignal_t numAirFramesWithTBsReceivedSignal_;
+    simsignal_t numAirFramesWithTBsNotReceivedSignal_;
+    simsignal_t numSCIAndTBPairsSignal_;
+
+    unsigned int numSCIAndTBPairs_;
 
     void storeAirFrame(LteAirFrame* newFrame);
-    LteAirFrame* extractAirFrame();
+    LteAirFrame* extractAirFrame(bool isSci);
     void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo);
     // ---------------------------------------------------------------- //
 

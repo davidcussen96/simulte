@@ -89,7 +89,24 @@ simple LtePhyVueV2X extends LtePhyUeD2D
     parameters:
         @class("LtePhyVueV2X");
         
-        //# V2X MCS statistic?
+        //# V2X Received AirFrames statistics.
+        @signal[averageCqiD2D];
+        @statistic[averageCqiD2D](title="Average Cqi reported in D2D"; unit="cqi"; source="averageCqiD2D"; record=mean,vector);
+        
+        @signal[numAirFramesWithSCIsReceivedSignal];
+        @statistic[numAirFramesWithSCIsReceivedSignal](title="Number of Airframes received with SCIs"; unit="num airframes"; source="numAirFramesWithSCIsReceivedSignal"; record=count,vector);
+        
+        @signal[numAirFramesWithSCIsNotReceivedSignal];
+        @statistic[numAirFramesWithSCIsNotReceivedSignal](title="Number of Airframes not received with SCIs"; unit="num airframes"; source="numAirFramesWithSCIsNotReceivedSignal"; record=count,vector);
+        
+        @signal[numAirFramesWithTBsReceivedSignal];
+        @statistic[numAirFramesWithTBsReceivedSignal](title="Number of Airframes received with TBs"; unit="num airframes"; source="numAirFramesWithTBsReceivedSignal"; record=count,vector);
+        
+        @signal[numAirFramesWithTBsNotReceivedSignal];
+        @statistic[numAirFramesWithTBsNotReceivedSignal](title="Number of Airframes not received with TBs"; unit="num airframes"; source="numAirFramesWithTBsNotReceivedSignal"; record=count,vector);
+        
+        @signal[numSCIAndTBPairsSignal];
+        @statistic[numSCIAndTBPairsSignal](title="Number of SCI and TB pairs received"; unit="num airframes"; source="numSCIAndTBPairsSignal"; record=count,vector);
 }
 
 // 

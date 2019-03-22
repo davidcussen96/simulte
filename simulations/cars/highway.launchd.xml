@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <!-- debug config -->
 <launch>
-    <copy file="manhattan.net.xml" />
-    <copy file="manhattan_grid.rou.xml" />
-    <copy file="manhattan_grid.rou.alt.xml" />
-    <copy file="manhattan_grid.sumo.cfg" type="config" />
+    <copy file="highway.net.xml" />
+    <copy file="highway_fast.rou.xml" />
+    <copy file="highway_slow.rou.xml" />
+    <copy file="highway.sumo.cfg" type="config" />
 </launch>
 
