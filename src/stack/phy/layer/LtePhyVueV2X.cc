@@ -24,10 +24,8 @@ Define_Module(LtePhyVueV2X);
 
 LtePhyVueV2X::LtePhyVueV2X()
 {
-
     handoverStarter_ = NULL;
     handoverTrigger_ = NULL;
-
 }
 
 LtePhyVueV2X::~LtePhyVueV2X()
@@ -56,6 +54,7 @@ void LtePhyVueV2X::initialize(int stage)
         numAirFramesWithTBsReceivedSignal_ = registerSignal("numAirFramesWithTBsReceivedSignal");
         numAirFramesWithTBsNotReceivedSignal_ = registerSignal("numAirFramesWithTBsNotReceivedSignal");
         numSCIAndTBPairsSignal_ = registerSignal("numSCIAndTBPairsSignal");
+        distance_ = registerSignal("distanceSignal");
         d2dTxPower_ = par("d2dTxPower");
         d2dMulticastEnableCaptureEffect_ = par("d2dMulticastCaptureEffect");
         v2xDecodingTimer_ = NULL;
@@ -365,6 +364,8 @@ void LtePhyVueV2X::handleAirFrame(cMessage* msg)
     EV << "LtePhyUeD2D: received new LteAirFrame with ID " << frame->getId() << " from channel" << endl;
 
     lteInfo->setDestId(nodeId_);
+    // Get rx coord from lteInfo (getCoord) and myCoord_
+    dist = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getCoord().distance(lteInfo->getCoord());
 
     // send H-ARQ feedback up
     if (lteInfo->getFrameType() == HARQPKT || lteInfo->getFrameType() == GRANTPKT || lteInfo->getFrameType() == RACPKT || lteInfo->getFrameType() == D2DMODESWITCHPKT)
@@ -657,6 +658,8 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
             emit(numAirFramesWithSCIsNotReceivedSignal_, numAirFramesWithSCIsNotReceived_);
             sciReceivedCorrectly[lteInfo->getSourceId()] = false;
         }
+        // Emit distance between TX node and RX node.
+        emit(distance_, dist);
 
         EV << "Handled LteAirframe (SCI) with ID " << frame->getId() << " with result "
            << ( result ? "RECEIVED" : "NOT RECEIVED" ) << endl;

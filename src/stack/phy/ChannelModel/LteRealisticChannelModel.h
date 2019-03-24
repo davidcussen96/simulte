@@ -286,6 +286,11 @@ class LteRealisticChannelModel : public LteChannelModel
         return &jakesFadingMap_;
     }
 
+    const inet::Coord getCoord()
+    {
+        return myCoord_;
+    }
+
   protected:
 
     /* compute speed (m/s) for a given node

@@ -67,17 +67,17 @@ network Highway
         eNodeB1: eNodeB {
             @display("p=156,136;is=vl");
         }
-        eNodeB2: eNodeB {
-            @display("p=391,313;is=vl");
-        }
+//        eNodeB2: eNodeB {
+//            @display("p=391,313;is=vl");
+//        }
 
     connections allowunconnected:
         server.pppg++ <--> Eth10G <--> router.pppg++;
         router.pppg++ <--> Eth10G <--> pgw.filterGate;
         pgw.pppg++ <--> Eth10G <--> eNodeB1.ppp;
-        pgw.pppg++ <--> Eth10G <--> eNodeB2.ppp;
+//        pgw.pppg++ <--> Eth10G <--> eNodeB2.ppp;
 
-        //# X2 connections
-        eNodeB1.x2++ <--> Eth10G <--> eNodeB2.x2++;
+//        //# X2 connections
+//        eNodeB1.x2++ <--> Eth10G <--> eNodeB2.x2++;
 }
 
