@@ -32,7 +32,7 @@ void LteHarqProcessRx::insertPdu(Codeword cw, LteMacPdu *pdu)
 
     EV << "LteHarqProcessRx::insertPdu - ndi is " << ndi << endl;
     if (ndi && !(status_.at(cw) == RXHARQ_PDU_EMPTY))
-        throw cRuntimeError("New data arriving in busy harq process -- this should not happen");
+        //throw cRuntimeError("New data arriving in busy harq process -- this should not happen");
 
     if (!ndi && !(status_.at(cw) == RXHARQ_PDU_EMPTY) && !(status_.at(cw) == RXHARQ_PDU_CORRUPTED))
         throw cRuntimeError(

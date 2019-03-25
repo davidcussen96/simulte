@@ -109,7 +109,7 @@ simple LtePhyVueV2X extends LtePhyUeD2D
         @statistic[numSCIAndTBPairsSignal](title="Number of SCI and TB pairs received"; unit="num airframes"; source="numSCIAndTBPairsSignal"; record=count,vector);
         
         @signal[distanceSignal];
-        @statistic[distanceSignal](title="Distance between RX and TX"; unit="metres"; source="distanceSignal"; record=mean,vector);
+        @statistic[distanceSignal](title="Distance between RX and TX"; unit="metres"; source="distanceSignal"; record=vector);
 }
 
 // 
