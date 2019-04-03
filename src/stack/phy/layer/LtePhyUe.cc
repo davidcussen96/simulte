@@ -449,7 +449,7 @@ void LtePhyUe::handleAirFrame(cMessage* msg)
     if (result)
         numAirFramesWithSCIsReceived_++;
     else
-        numAirFramesWithSCIsNotReceived_++;
+        //numAirFramesWithSCIsNotReceived_++;
 
     EV << "Handled LteAirframe with ID " << frame->getId() << " with result "
        << ( result ? "RECEIVED" : "NOT RECEIVED" ) << endl;

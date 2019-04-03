@@ -31,11 +31,11 @@
 -->
 
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
-    <vType id="vtype0" length="2.50" minGap="2.50" maxSpeed="15.00" color="255,1,0" accel="2.6" decel="4.5" sigma="0.5"/>
+    <vType id="vtype0" length="2.50" minGap="2.50" maxSpeed="60.00" color="255,1,0" accel="2.6" decel="4.5" sigma="0.5"/>
     <vehicle id="flow0.0" type="vtype0" depart="1.00" departLane="0" departSpeed="max">
         <route edges="left0A0 A0B0 B0C0 C0C1 C1C2 C2C3 C3B3 B3B2 B2A2 A2left2"/>
     </vehicle>
-    <vType id="vtype1" length="2.50" minGap="2.50" maxSpeed="15.00" color="1,255,0" accel="2.6" decel="4.5" sigma="0.5"/>
+    <vType id="vtype1" length="2.50" minGap="2.50" maxSpeed="60.00" color="1,255,0" accel="2.6" decel="4.5" sigma="0.5"/>
     <vehicle id="flow1.0" type="vtype1" depart="1.00" departLane="1" departSpeed="max">
         <route edges="left0A0 A0B0 B0B1 B1B2 B2B3 B3C3 C3D3 D3right3"/>
     </vehicle>

@@ -2,6 +2,6 @@
 <!-- debug config -->
 <launch>
     <copy file="highway.net.xml" />
-    <copy file="highway_slow.rou.xml" />
+    <copy file="highway_fast.rou.xml" />
     <copy file="highway.sumo.cfg" type="config" />
 </launch>
