@@ -51,11 +51,13 @@ class LtePhyVueV2X : public LtePhyUeD2D
     simsignal_t numAirFramesWithSCIsNotReceivedSignal_;
     simsignal_t numAirFramesWithTBsReceivedSignal_;
     simsignal_t numAirFramesWithTBsNotReceivedSignal_;
-    simsignal_t numSCIAndTBPairsSignal_;
     simsignal_t distance_;
 
-    unsigned int numSCIAndTBPairs_;
-    double dist;
+    double dist = 0;
+    unsigned int numAirFramesWithSCIsReceived_ = 0;
+    unsigned int numAirFramesWithSCIsNotReceived_ = 0;
+    unsigned int numAirFramesWithTBsReceived_ = 0;
+    unsigned int numAirFramesWithTBsNotReceived_ = 0;
 
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame(bool isSci);

@@ -53,7 +53,6 @@ void LtePhyVueV2X::initialize(int stage)
         numAirFramesWithSCIsNotReceivedSignal_ = registerSignal("numAirFramesWithSCIsNotReceivedSignal");
         numAirFramesWithTBsReceivedSignal_ = registerSignal("numAirFramesWithTBsReceivedSignal");
         numAirFramesWithTBsNotReceivedSignal_ = registerSignal("numAirFramesWithTBsNotReceivedSignal");
-        numSCIAndTBPairsSignal_ = registerSignal("numSCIAndTBPairsSignal");
         distance_ = registerSignal("distanceSignal");
         d2dTxPower_ = par("d2dTxPower");
         d2dMulticastEnableCaptureEffect_ = par("d2dMulticastCaptureEffect");
@@ -94,12 +93,10 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
 
             delete frame;
         }
-        //numSCIAndTBPairs_ += sciReceivedCorrectly.size();
-        sciReceivedCorrectly.clear();
-        // Clear MCS map.
-        mcsMap.clear();
+
         delete msg;
         v2xDecodingTimer_ = NULL;
+
     } else if (msg->isName("updatePointers"))
     {
         if (current == 0)
@@ -172,21 +169,37 @@ void LtePhyVueV2X::handleSelfMessage(cMessage *msg)
 
     else
         LtePhyUe::handleSelfMessage(msg);
+
+    emit(numAirFramesWithSCIsReceivedSignal_, numAirFramesWithSCIsReceived_);
+    emit(numAirFramesWithSCIsNotReceivedSignal_, numAirFramesWithSCIsNotReceived_);
+    emit(numAirFramesWithTBsReceivedSignal_, numAirFramesWithTBsReceived_);
+    emit(numAirFramesWithTBsNotReceivedSignal_, numAirFramesWithTBsNotReceived_);
+    // Emit distance between TX node and RX node.
+    emit(distance_, dist);
+
+    numAirFramesWithSCIsReceived_ = 0;
+    numAirFramesWithSCIsNotReceived_ = 0;
+    numAirFramesWithTBsReceived_ = 0;
+    numAirFramesWithTBsNotReceived_ = 0;
+    dist = 0;
+
+    sciReceivedCorrectly.clear();
+    mcsMap.clear();
 }
 
 void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
 {
-    int pRsvpTxPrime = 0, prioRx = 0, k = 1, lSubch = 1, pRsvpRx, pStep = 100, thresAddition = 0,
-    numSubch = numSubchannels, numCsrs, subchIndex, q = 1, msAgo = 1000, thIndex, riv, Th;
-    bool wrapped;   // notSensedChecked = false,
+    int pRsvpTxPrime = 0, prioRx = 0, k = 1, lSubch = 1, pRsvpRx,
+    pStep = 100, thresAddition = 0, numSubch = numSubchannels, numCsrs,
+    subchIndex, q = 1, msAgo = 1000, thIndex, riv, Th;
+    bool wrapped;
     pRsvpTxPrime = pStep * pRsvpTx / 100;
-
     std::vector<std::vector<Subchannel*>> Sa;
-
     do
     {
         Sa.clear();
-        // Initialize set Sa. Its necessary to reinitialize Sa at every iteration.
+        // Initialize set Sa. Its necessary to reinitialize Sa at
+        // every iteration.
         for (int i = 0; i < 100; i++)
         {
             std::vector<Subchannel*> temp;
@@ -197,11 +210,11 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
             }
             Sa.push_back(temp);
         }
-        numCsrs = 400;
+        numCsrs = 500;
         wrapped = false;
         /*
-         * Iterate through sensing window starting at pointerToEnd and finishing at current. (REVERSE)
-         * Special Condition: C=0, E=999.
+         * Iterate through sensing window starting at pointerToEnd and
+         * finishing at current. (REVERSE) - Special Condition: C=0, E=999.
          *
          */
 
@@ -213,7 +226,8 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
                 // Is the subchannel not sensed? If it is.
                 if (sensingWindow[frame][channel]->getNotSensed() == 1)
                 {
-                    // Determine overlapping subframes which the current notSensed subframe.
+                    // Determine overlapping subframes which the
+                    // current notSensed subframe.
                     for (unsigned int y = 0; y < 100; y++)
                     {
                         for (unsigned int j = 0; j < cResel; j++)
@@ -224,10 +238,12 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
                                 {
                                     Sa[y][z]->setNotSensed(true);
                                 }
-                                j = cResel, y = 100, channel = numSubchannels;  // BREAK
+                                // BREAK
+                                j = cResel, y = 100, channel = numSubchannels;
                                 numCsrs -= numSubchannels;
 
                             }
+
                         }
                     }
 
@@ -244,7 +260,7 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
                     }
                     thIndex = ((prioTx/100)*8) + prioRx + 1;
                     //infinity: if 0 always less than, if 66 always greater than.
-                    if (thIndex != 0 && thIndex != 66) Th = (-128 + (thIndex-1)*2) + thresAddition;
+                    if (thIndex != 0 && thIndex != 66) Th=(-128+(thIndex-1)*2)+thresAddition;
 
                     if (thIndex == 66 || sensingWindow[frame][channel]->isRsrpGreaterThan(Th))
                     {
@@ -324,7 +340,8 @@ void LtePhyVueV2X::chooseCsr(int prioTx, int pRsvpTx, int cResel)
     else b = false;     // There are no CSRs in rssiValues.
     while (size < 100 && b)
     {
-        if (rssiValues.size() == 0) break;  // There are no CSRs in rssiValues.
+        // There are no CSRs in rssiValues.
+        if (rssiValues.size() == 0) break;
         currentRssi = rssiValues.back();
         rssiValues.pop_back();
         listOfCsrs.push_back(Sa[get<1>(currentRssi)][get<2>(currentRssi)]);
@@ -378,14 +395,14 @@ void LtePhyVueV2X::handleAirFrame(cMessage* msg)
         if (v2xDecodingTimer_ == NULL)
         {
             v2xDecodingTimer_ = new cMessage("v2xDecodingTimer");
-            v2xDecodingTimer_->setSchedulingPriority(10);          // last thing to be performed in this TTI
+            v2xDecodingTimer_->setSchedulingPriority(9);
             scheduleAt(NOW, v2xDecodingTimer_);
         }
 
         if (updateSensingWindow_ == NULL)
         {
             updateSensingWindow_ = new cMessage("updateSensingWindow");
-            updateSensingWindow_->setSchedulingPriority(10);
+            updateSensingWindow_->setSchedulingPriority(10); // last thing to be performed in this TTI
             scheduleAt(NOW, updateSensingWindow_);
         }
 
@@ -446,6 +463,7 @@ void LtePhyVueV2X::handleUpperMessage(cMessage* msg)
         notSensedFlag = true;
         // Received a grant so we create an SCI.
         Sci* sci = new Sci(grant->getPriority(), grant->getResourceReservation());
+        sci->setMcs(4);
         // Extract csr from grant.
         // Subchannel* csr = grant->getCsr();
         LteAirFrame* sciFrame = new LteAirFrame("SCI");
@@ -512,20 +530,20 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
     Coord myCoord = getCoord();
     std::vector<double> rsrpVector;
     std::vector<double> rssiVector;
-    MacNodeId enbId = binder_->getNextHop(newInfo->getSourceId());   // eNodeB id??
-    //MacNodeId enbId = 1;
-    // strcmp(par("d2dMulticastCaptureEffectFactor"), "RSRP") == 0 &&
-    if ((strcmp(newFrame->getName(), "data frame") == 0 || strcmp(newFrame->getName(), "SCI") == 0))
+    MacNodeId enbId = binder_->getNextHop(newInfo->getSourceId());
+
+    rssiVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord, enbId);
+    rsrpVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+    int rsrp = 0;
+    int rssi = 0;
+
+    int subchannelIndex = -1;   // Not assigned
+
+    // get the average RSRP on the RBs allocated for the transmission
+    RbMap rbmap = newInfo->getGrantedBlocks();
+
+    if (strcmp(newFrame->getName(), "SCI") == 0)
     {
-        rssiVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getSINR_D2D(newFrame, newInfo, nodeId_, myCoord, enbId);
-        rsrpVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
-        int rsrp = 0;
-        int rssi = 0;
-
-        int subchannelIndex = -1;   // Not assigned
-
-        // get the average RSRP on the RBs allocated for the transmission
-        RbMap rbmap = newInfo->getGrantedBlocks();
         //for each Remote unit used to transmit the packet
         for (const auto &myRemote : rbmap)
         {
@@ -538,25 +556,19 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
                 if (subchannelIndex == -1)
                 {
                     if (band == 0 or band == 2) subchannelIndex = 0;
-                    else if (band == 10 or band == 12) subchannelIndex = 1;
-                    else if (band == 20 or band == 22) subchannelIndex = 2;
-                    else if (band == 30 or band == 32) subchannelIndex = 3;
-                    else if (band == 40 or band == 42) subchannelIndex = 4;
+                    else if (band == 10) subchannelIndex = 1;
+                    else if (band == 20) subchannelIndex = 2;
+                    else if (band == 30) subchannelIndex = 3;
+                    else if (band == 40) subchannelIndex = 4;
                 }
                 rsrp += rsrpVector.at(band);
                 rssi += rssiVector.at(band);
             }
         }
         cPacket* pkt = newFrame->getEncapsulatedPacket();
-        if (dynamic_cast<Sci*>(pkt) == nullptr) {
-
-            Subchannel* subchannel = new Subchannel(rsrp, rssi, sourceId, subchannelIndex);
-            tbList.push_back(subchannel);
-        } else {
-            Sci* sci = check_and_cast<Sci*>(pkt);
-            Subchannel* subchannel = new Subchannel(sci, rsrp, rssi, sourceId, subchannelIndex);
-            sciList.push_back(subchannel);
-        }
+        Sci* sci = check_and_cast<Sci*>(pkt);
+        Subchannel* subchannel = new Subchannel(sci, rsrp, rssi, sourceId, subchannelIndex);
+        sciList.push_back(subchannel);
 
         // If it doesnt have control info dont add it to v2xReceivedFrames
         if (dynamic_cast<UserControlInfo*>(newFrame->getControlInfo()) == nullptr)
@@ -564,14 +576,43 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
             newFrame->setControlInfo(newInfo);
         }
 
-        if (strcmp(newFrame->getName(), "SCI") == 0)
+        v2xReceivedFramesSCI_.push_back(newFrame);
+
+    } else if (strcmp(newFrame->getName(), "data frame") == 0 )
+    {
+        //for each Remote unit used to transmit the packet
+        for (const auto &myRemote : rbmap)
         {
-            v2xReceivedFramesSCI_.push_back(newFrame);
+            //for each logical band used to transmit the packet
+            for ( const auto &myBand : myRemote.second ) {
+                Band band = myBand.first;
+
+                if (myBand.second == 0) continue;
+
+                if (subchannelIndex == -1)
+                {
+                    if (band == 2) subchannelIndex = 0;
+                    else if (band == 12) subchannelIndex = 1;
+                    else if (band == 22) subchannelIndex = 2;
+                    else if (band == 32) subchannelIndex = 3;
+                    else if (band == 42) subchannelIndex = 4;
+                }
+                rsrp += rsrpVector.at(band);
+                rssi += rssiVector.at(band);
+            }
         }
-        else if (strcmp(newFrame->getName(), "data frame") == 0)
+
+        Subchannel* subchannel = new Subchannel(rsrp, rssi, sourceId, subchannelIndex);
+        tbList.push_back(subchannel);
+
+        // If it doesnt have control info dont add it to v2xReceivedFrames
+        if (dynamic_cast<UserControlInfo*>(newFrame->getControlInfo()) == nullptr)
         {
-            v2xReceivedFramesTB_.push_back(newFrame);
+            newFrame->setControlInfo(newInfo);
         }
+
+        v2xReceivedFramesTB_.push_back(newFrame);
+
     }
     //delete newFrame;
 }
@@ -579,7 +620,7 @@ void LtePhyVueV2X::storeAirFrame(LteAirFrame* newFrame)
 void LtePhyVueV2X::updatePointers()
 {
     updatePointers_ = new cMessage("updatePointers");
-    updatePointers_->setSchedulingPriority(10);
+    updatePointers_->setSchedulingPriority(8);
     scheduleAt(NOW+TTI, updatePointers_);
 }
 
@@ -611,7 +652,7 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
         Sci* sci = check_and_cast<Sci*>(pkt);   // Extract SCI from frame.
         // if SCI decode using MCS 0 and store its MCS value
         unsigned int sciMcs = sci->getMcs();
-        mcsMap.insert(std::make_pair(lteInfo->getSourceId(), sciMcs));
+        mcsMap[lteInfo->getSourceId()] = sciMcs;
 
         // apply decider to received packet
         bool result;
@@ -635,24 +676,23 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
         else
         {
             unsigned int mcs = 0;
-            result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error(frame,lteInfo, mcs);
+            Coord myCoord = getCoord();
+            std::vector<double> rsrpVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getRSRP_D2D(frame, lteInfo, nodeId_, myCoord);
+            result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error_D2D(frame, lteInfo, rsrpVector, mcs);
         }
 
         // update statistics
         if (result)
         {
             numAirFramesWithSCIsReceived_++;
-            emit(numAirFramesWithSCIsReceivedSignal_, numAirFramesWithSCIsReceived_);
             sciReceivedCorrectly[lteInfo->getSourceId()] = true;
         }
         else
         {
+
             numAirFramesWithSCIsNotReceived_++;
-            emit(numAirFramesWithSCIsNotReceivedSignal_, numAirFramesWithSCIsNotReceived_);
             sciReceivedCorrectly[lteInfo->getSourceId()] = false;
         }
-        // Emit distance between TX node and RX node.
-        emit(distance_, dist);
 
         EV << "Handled LteAirframe (SCI) with ID " << frame->getId() << " with result "
            << ( result ? "RECEIVED" : "NOT RECEIVED" ) << endl;
@@ -664,7 +704,7 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
     } else if (strcmp(frame->getName(), "data frame") == 0){
 
         // No SCI for the TB.
-        if ( mcsMap.find(lteInfo->getSourceId()) == mcsMap.end())
+        if (sciReceivedCorrectly[lteInfo->getSourceId()] == 0 && mcsMap.find(lteInfo->getSourceId()) == mcsMap.end())
         {
             return;
         }
@@ -694,26 +734,22 @@ void LtePhyVueV2X::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo)
         }
         else
         {
-            result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error(frame,lteInfo, mcs);
+            //result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error(frame,lteInfo, mcs);
+            Coord myCoord = getCoord();
+            std::vector<double> rsrpVector = check_and_cast<LteRealisticChannelModel*>(channelModel_)->getRSRP_D2D(frame, lteInfo, nodeId_, myCoord);
+            result = check_and_cast<LteRealisticChannelModel*>(channelModel_)->error_D2D(frame, lteInfo, rsrpVector, mcs);
         }
 
         // update statistics
         if (result)
         {
             numAirFramesWithTBsReceived_++;
-            emit(numAirFramesWithTBsReceivedSignal_, numAirFramesWithTBsReceived_);
-            if (sciReceivedCorrectly[lteInfo->getSourceId()] == 1)
-            {
-                numSCIAndTBPairs_++;
-                emit(numSCIAndTBPairsSignal_, numSCIAndTBPairs_);
-            }
             // Remove key value pair
-            //sciReceivedCorrectly.erase(lteInfo->getSourceId());
+
         }
         else
         {
             numAirFramesWithTBsNotReceived_++;
-            emit(numAirFramesWithTBsNotReceivedSignal_, numAirFramesWithTBsNotReceived_);
         }
 
         EV << "Handled LteAirframe (TB) with ID " << frame->getId() << " with result "

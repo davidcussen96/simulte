@@ -6,7 +6,6 @@
 class Subchannel
 {
 private:
-    //RbMap rbmap;        // Don't think Subchannel needs RbMap, can be determined using subchannel.
     Sci* sci;
     int rsrp;
     int rssi;

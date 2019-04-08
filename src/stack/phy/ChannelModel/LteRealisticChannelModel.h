@@ -195,6 +195,7 @@ class LteRealisticChannelModel : public LteChannelModel
      * @param rsrpVector the received signal for each RB, if it has already been computed
      */
     virtual bool error_D2D(LteAirFrame *frame, UserControlInfo* lteI, std::vector<double> rsrpVector);
+    virtual bool error_D2D(LteAirFrame *frame, UserControlInfo* lteI, std::vector<double> rsrpVector, unsigned int mcs);
     /*
      * Compute the error probability of the transmitted packet according to cqi used, txmode, and the received power
      * after that it throws a random number in order to check if this packet will be corrupted or not
